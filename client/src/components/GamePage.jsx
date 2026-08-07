@@ -1,5 +1,7 @@
 import { useParams } from "react-router-dom"
 import { useEffect, useState } from "react"
+import GameEntry from './components/GameEntry.jsx'  
+import HostView from './components/HostView.jsx'
 const DEFAULT_FORM = {
         name: '',
         buyIn: ''
@@ -8,6 +10,7 @@ function GamePage() {
     const { id } = useParams()
     const [game, setGame] = useState()
     const [players, setPlayer] = useState([])
+    const [view, setView] = useState('entry')
     
 
     const [playersForm, setPlayersForm] = useState(DEFAULT_FORM)
@@ -73,6 +76,14 @@ function GamePage() {
     }
 
     if (!game) return <div>Loading...</div>
+
+    if (view === 'entry') {
+        return <GameEntry/>
+    }
+
+    if (view === 'host') {
+        return <HostView/>
+    }
     
   return (
     <div>
