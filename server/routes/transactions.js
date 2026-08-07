@@ -13,10 +13,10 @@ router.get('/:game_id', (req, res) => {
 })
 
 router.post('/', (req, res) => {
-    const { player_id, game_id, amount, type } = req.body
+    const { player_id, game_id, amount, type, status } = req.body
     const created_at = new Date().toISOString()
 
-    const result = db.prepare(`INSERT INTO transactions (player_id, game_id, created_at, amount, type) VALUES (?, ?, ?, ?, ?)`).run(player_id, game_id, created_at, amount, type)
+    const result = db.prepare(`INSERT INTO transactions (player_id, game_id, created_at, amount, type, status) VALUES (?, ?, ?, ?, ?, ?)`).run(player_id, game_id, created_at, amount, type, status)
 
     const newTransaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.lastInsertRowid)
 

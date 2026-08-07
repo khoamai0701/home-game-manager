@@ -41,6 +41,7 @@
         }
         async function handleSubmit(e) {
             e.preventDefault()
+            
 
             const response = await fetch('/api/players', {
                 method: 'POST',
@@ -61,7 +62,7 @@
                 body: JSON.stringify({
                     player_id: data.id,
                     game_id: id,
-                    amount: playersForm.buyIn,
+                    amount: Number(playersForm.buyIn),
                     type: 'buyin',
                     status: 'approved'
                 })
