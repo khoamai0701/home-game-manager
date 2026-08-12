@@ -9,10 +9,12 @@
     function GamePage() {
         const { id } = useParams()
         const [game, setGame] = useState()
-        const [players, setPlayer] = useState([])
+        const [players, setPlayers] = useState([])
         const [view, setView] = useState('entry')
-        const [pin, setPin] = useState()
+        const [pin, setPin] = useState('')
         const [error, setError] = useState(null)
+        const [currentPlayer, setCurrentPlayer] = useState(null)
+        const [topOff, setTopOff] = useState('')
         
 
         const [playersForm, setPlayersForm] = useState(DEFAULT_FORM)
@@ -27,11 +29,38 @@
 
             fetch(`/api/players/${id}`)
             .then(res => res.json())
-            .then(data => setPlayer(data) )
+            .then(data => { 
+                setPlayers(data)
+                
+                const saved = localStorage.getItem(`player_${id}`)
+
+                const hostSaved = localStorage.getItem(`host_${id}`)
+                if (saved) {
+
+                    const parsed = JSON.parse(saved)
+                    if (data.find(p => p.id === parsed.id)) { //checks to see if the player in localStorage is still in database
+                         setCurrentPlayer(JSON.parse(saved))
+                         setView('player')
+
+                    } else {
+                        localStorage.removeItem(`player_${id}`)
+                    }
+                   
+                } 
+
+                if (hostSaved) {
+                    setView('host')
+                }
+
+            })
 
             fetch(`/api/transactions/${id}`)
             .then(res => res.json())
             .then(data => setTransactions(data) )
+
+            
+
+
 
         }, [id])
 
@@ -52,8 +81,10 @@
             
 
             const data = await response.json()
+            setCurrentPlayer(data)
+            localStorage.setItem(`player_${id}`, JSON.stringify(data))
             
-            setPlayer(prev => [...prev, data])
+            setPlayers(prev => [...prev, data])
             
 
             const response2 = await fetch('/api/transactions', {
@@ -77,6 +108,7 @@
         function handlePinSubmit() {
             if (game.pin === pin) {
                 setView('host')
+                localStorage.setItem(`host_${id}`, true)
             }
             else {
                 setError('Incorrect PIN try again')
@@ -84,12 +116,39 @@
 
         }
 
+        async function handleTopOff() {
+            const response = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: {'Content-type' : 'application/json'},
+                body: JSON.stringify({
+                    player_id: currentPlayer.id,
+                    game_id: id,
+                    amount: topOff,
+                    type: 'topoff',
+                    status: 'pending'
+                })
+            })
+
+            const data = await response.json()
+            setTransactions(prev => [...prev, data])
+            setTopOff('')
+        }
+        async function handleApprove(transactionId) {
+            await fetch(`/api/transactions/${transactionId}`, {method: 'PATCH'} )
+
+            setTransactions(prev => prev.map(t => t.id === transactionId ? {...t, status: 'approved' } :t))
+        }
+
         async function deletePlayer(playerId) {
             await fetch(`/api/players/${playerId}`, {method: 'DELETE'})
-            setPlayer(prev => prev.filter(player => player.id !== playerId))
+            setPlayers(prev => prev.filter(player => player.id !== playerId))
+            localStorage.removeItem(`player_${id}`)
+            setCurrentPlayer(null)
         }
 
         if (!game) return <div>Loading...</div>
+
+
 
         
 
@@ -112,12 +171,14 @@
         
     return (
         <div>
-            Game Page
-            <p>{game.location}
-                {game.date}
-            </p>
-            
-            <form onSubmit={handleSubmit}>
+            {currentPlayer ? (
+                <div>
+                    <h2>top off</h2>
+                    <input type="number" placeholder="Amount" value={topOff} onChange={e => setTopOff(e.target.value)}/>
+                    <button type="submit" onClick={handleTopOff}>Submit</button>
+                </div>
+            ): (
+                <form onSubmit={handleSubmit}>
                 <h2>Add a Player</h2>
                 <label>Name</label>
                 <input type="text" name="name" value={playersForm.name} onChange={handleChange}></input>
@@ -128,12 +189,20 @@
                 <button type="submit">Add</button>
                 
             </form>
+            )}
+            Game Page
+            <p>{game.location}
+                {game.date}
+            </p>
+            
+            
 
             {players.map(p => {
                 const playerTransactions = transactions.filter(t => t.player_id === p.id && t.status === 'approved')
                 const totalBuyIn = playerTransactions.reduce((sum,  t) => sum + t.amount, 0)
 
                 return(
+                    
                     <div key={p.id}>
                         <p>{p.name} - ${totalBuyIn}</p>
                         {view === 'host' && <button onClick={() => deletePlayer(p.id)}>Delete</button>}
@@ -142,6 +211,24 @@
                 ) 
                 
             })}
+            {view === 'host' && (
+                <div>
+                    <h2>Pending Transactions</h2>
+                    {
+                        transactions
+                        .filter(t => t.status === 'pending')
+                        .map(t => {
+                            const player = players.find(p => p.id === t.player_id)
+                            return(
+                                <div key={t.id}>
+                                    <p>{player?.name} - ${t.amount}</p>
+                                    <button onClick={() => handleApprove(t.id)}>Approve</button>
+                                </div>
+                            )
+                        })
+                    }
+                </div>
+            )}
         
         </div>
 
