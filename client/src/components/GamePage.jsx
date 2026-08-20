@@ -19,6 +19,8 @@
 
         const [playersForm, setPlayersForm] = useState(DEFAULT_FORM)
         const [transactions, setTransactions] = useState([])
+        const [cashOut, setCashOut] = useState('')
+        const [previousView, setPreviousView] = useState(null)
         
 
 
@@ -133,6 +135,25 @@
             setTransactions(prev => [...prev, data])
             setTopOff('')
         }
+
+        async function handleCashOutSubmit() {
+            const response = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: {'Content-type' : 'application/json'},
+                body: JSON.stringify({
+                    player_id: currentPlayer.id,
+                    game_id: id,
+                    amount: cashOut,
+                    type: 'cashout',
+                    status: 'pending'
+                })
+            })
+
+            const data = await response.json()
+            setTransactions(prev => [...prev, data])
+            setCashOut('')
+            setView(previousView)
+        }
         async function handleApprove(transactionId) {
             await fetch(`/api/transactions/${transactionId}`, {method: 'PATCH'} )
 
@@ -164,6 +185,16 @@
                 {error && <p>{error}</p>}
             </div>
         )
+
+        if (view === 'cashOut') return (
+            <div>
+                <h1>Cash Out</h1>
+                <h2>Enter Stack</h2>
+                <input type="number" name="stack" value={cashOut} onChange={e => setCashOut(e.target.value)}/>
+                <button onClick={handleCashOutSubmit}>Submit</button>
+                <button onClick={() => setView(previousView)}>Back</button>
+            </div>
+        )
         
         
 
@@ -176,6 +207,7 @@
                     <h2>top off</h2>
                     <input type="number" placeholder="Amount" value={topOff} onChange={e => setTopOff(e.target.value)}/>
                     <button type="submit" onClick={handleTopOff}>Submit</button>
+                    <button onClick={() => { setPreviousView(view); setView('cashOut')}}>Cash Out</button>
                 </div>
             ): (
                 <form onSubmit={handleSubmit}>
@@ -198,13 +230,15 @@
             
 
             {players.map(p => {
-                const playerTransactions = transactions.filter(t => t.player_id === p.id && t.status === 'approved')
+                const playerTransactions = transactions.filter(t => t.player_id === p.id && t.status === 'approved' && t.type !== 'cashout')
                 const totalBuyIn = playerTransactions.reduce((sum,  t) => sum + t.amount, 0)
+                const approvedCashOut = transactions.find(t => t.player_id === p.id && t.status === 'approved' && t.type === 'cashout')
+
 
                 return(
                     
                     <div key={p.id}>
-                        <p>{p.name} - ${totalBuyIn}</p>
+                        <p>{p.name} - ${totalBuyIn} {approvedCashOut ?  `profit: $${approvedCashOut.amount - totalBuyIn}` : ''}</p>
                         {view === 'host' && <button onClick={() => deletePlayer(p.id)}>Delete</button>}
                     
                     </div>
@@ -221,7 +255,7 @@
                             const player = players.find(p => p.id === t.player_id)
                             return(
                                 <div key={t.id}>
-                                    <p>{player?.name} - ${t.amount}</p>
+                                    <p>{player?.name} - ${t.amount} ({t.type})</p>
                                     <button onClick={() => handleApprove(t.id)}>Approve</button>
                                 </div>
                             )
@@ -234,7 +268,7 @@
                 const player = players.find(p => p.id === t.player_id)
                 return (
                     <div key={t.id}>
-                        <p>{player?.name} - ${t.amount} at {new Date(t.created_at).toLocaleTimeString()} ({t.type})</p>
+                        <p>{player?.name} - ${t.amount} at {new Date(t.created_at).toLocaleTimeString()} ({t.type}) {t.status}</p>
                     </div>
                 )
             })}
