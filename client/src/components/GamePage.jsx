@@ -18,7 +18,7 @@
         
 
         const [playersForm, setPlayersForm] = useState(DEFAULT_FORM)
-        const [transactions, setTransactions] =useState([])
+        const [transactions, setTransactions] = useState([])
         
 
 
@@ -229,6 +229,15 @@
                     }
                 </div>
             )}
+            <h2>Transaction Feed</h2>
+            {transactions.map(t => {
+                const player = players.find(p => p.id === t.player_id)
+                return (
+                    <div key={t.id}>
+                        <p>{player?.name} - ${t.amount} at {new Date(t.created_at).toLocaleTimeString()} ({t.type})</p>
+                    </div>
+                )
+            })}
         
         </div>
 
