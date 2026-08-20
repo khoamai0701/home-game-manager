@@ -167,115 +167,219 @@
             setCurrentPlayer(null)
         }
 
-        if (!game) return <div>Loading...</div>
+        if (!game) return <div className="loading-screen"><span className="spinner"></span>Loading table…</div>
 
 
 
-        
+
 
         if (view === 'entry') {
             return <GameEntry onSelectHost ={() => setView('pin')} onSelectPlayer = {() => setView('player')}/>
         }
 
         if (view === 'pin') return (
-            <div>
-                <h2>Enter the PIN</h2>
-                <input type="text" name="pin" value={pin} onChange={e =>setPin(e.target.value)}/>
-                <button onClick={handlePinSubmit}>Submit</button>
-                {error && <p>{error}</p>}
+            <div className="screen-center">
+                <div className="pin-card">
+                    <div className="brand-mark" style={{ marginBottom: 0 }}>🔒</div>
+                    <h2>Enter Host PIN</h2>
+                    <p className="pin-card__sub">Only the host has this code</p>
+                    <input
+                        className="pin-input"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="••••"
+                        name="pin"
+                        value={pin}
+                        onChange={e => setPin(e.target.value)}
+                    />
+                    {error && <p className="pin-error">{error}</p>}
+                    <button className="btn btn-primary btn-block" onClick={handlePinSubmit}>Unlock Host View</button>
+                </div>
             </div>
         )
 
         if (view === 'cashOut') return (
-            <div>
-                <h1>Cash Out</h1>
-                <h2>Enter Stack</h2>
-                <input type="number" name="stack" value={cashOut} onChange={e => setCashOut(e.target.value)}/>
-                <button onClick={handleCashOutSubmit}>Submit</button>
-                <button onClick={() => setView(previousView)}>Back</button>
+            <div className="screen-center">
+                <div className="cashout-card">
+                    <h1>Cash Out</h1>
+                    <p className="cashout-card__sub">Enter your final stack to request a cash out</p>
+                    <div className="cashout-input-wrap">
+                        <span>$</span>
+                        <input
+                            className="cashout-input"
+                            type="number"
+                            placeholder="0"
+                            name="stack"
+                            value={cashOut}
+                            onChange={e => setCashOut(e.target.value)}
+                        />
+                    </div>
+                    <div className="btn-column">
+                        <button className="btn btn-primary btn-block" onClick={handleCashOutSubmit}>Submit Cash Out</button>
+                        <button className="btn btn-secondary btn-block" onClick={() => setView(previousView)}>Back</button>
+                    </div>
+                </div>
             </div>
         )
-        
-        
 
-        
-        
+        const pendingTransactions = transactions.filter(t => t.status === 'pending')
+        const feedTransactions = [...transactions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        const typeIcon = { buyin: '💵', topoff: '🔄', cashout: '💰' }
+        const formatMoney = n => `$${Number(n).toLocaleString()}`
+
     return (
-        <div>
-            {currentPlayer ? (
-                <div>
-                    <h2>top off</h2>
-                    <input type="number" placeholder="Amount" value={topOff} onChange={e => setTopOff(e.target.value)}/>
-                    <button type="submit" onClick={handleTopOff}>Submit</button>
-                    <button onClick={() => { setPreviousView(view); setView('cashOut')}}>Cash Out</button>
+        <div className="app-shell">
+            <div className="game-header">
+                <div className="game-header__info">
+                    <span className="game-header__location">{game.location}</span>
+                    <span className="game-header__date">{game.date}</span>
                 </div>
-            ): (
-                <form onSubmit={handleSubmit}>
-                <h2>Add a Player</h2>
-                <label>Name</label>
-                <input type="text" name="name" value={playersForm.name} onChange={handleChange}></input>
+                {view === 'host' && <span className="role-badge role-badge--host">👑 Host</span>}
+                {view === 'player' && currentPlayer && <span className="role-badge role-badge--player">🂡 {currentPlayer.name}</span>}
+            </div>
 
-                <label>Buy-in</label>
-                <input type="number" name="buyIn" value={playersForm.buyIn} onChange={handleChange}></input>
-                
-                <button type="submit">Add</button>
-                
-            </form>
-            )}
-            Game Page
-            <p>{game.location}
-                {game.date}
-            </p>
-            
-            
-
-            {players.map(p => {
-                const playerTransactions = transactions.filter(t => t.player_id === p.id && t.status === 'approved' && t.type !== 'cashout')
-                const totalBuyIn = playerTransactions.reduce((sum,  t) => sum + t.amount, 0)
-                const approvedCashOut = transactions.find(t => t.player_id === p.id && t.status === 'approved' && t.type === 'cashout')
-
-
-                return(
-                    
-                    <div key={p.id}>
-                        <p>{p.name} - ${totalBuyIn} {approvedCashOut ?  `profit: $${approvedCashOut.amount - totalBuyIn}` : ''}</p>
-                        {view === 'host' && <button onClick={() => deletePlayer(p.id)}>Delete</button>}
-                    
+            <div className="page-content">
+                {currentPlayer ? (
+                    <div className="action-panel">
+                        <div className="action-panel__title">Top Off Your Stack</div>
+                        <div className="action-panel__row">
+                            <input
+                                className="form-input"
+                                type="number"
+                                placeholder="Amount"
+                                value={topOff}
+                                onChange={e => setTopOff(e.target.value)}
+                            />
+                        </div>
+                        <div className="action-panel__buttons">
+                            <button className="btn btn-primary" type="submit" onClick={handleTopOff}>Top Off</button>
+                            <button className="btn btn-outline-danger" onClick={() => { setPreviousView(view); setView('cashOut')}}>Cash Out</button>
+                        </div>
                     </div>
-                ) 
-                
-            })}
-            {view === 'host' && (
+                ): (
+                    <form className="form-card" onSubmit={handleSubmit}>
+                        <h2>Add a Player</h2>
+                        <div className="form-group">
+                            <label className="form-label" htmlFor="name">Name</label>
+                            <input className="form-input" id="name" type="text" name="name" placeholder="Player name" value={playersForm.name} onChange={handleChange}></input>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label" htmlFor="buyIn">Buy-in</label>
+                            <input className="form-input" id="buyIn" type="number" name="buyIn" placeholder="0" value={playersForm.buyIn} onChange={handleChange}></input>
+                        </div>
+                        <button className="btn btn-primary btn-block" type="submit">Add Player</button>
+                    </form>
+                )}
+
                 <div>
-                    <h2>Pending Transactions</h2>
-                    {
-                        transactions
-                        .filter(t => t.status === 'pending')
-                        .map(t => {
-                            const player = players.find(p => p.id === t.player_id)
-                            return(
-                                <div key={t.id}>
-                                    <p>{player?.name} - ${t.amount} ({t.type})</p>
-                                    <button onClick={() => handleApprove(t.id)}>Approve</button>
-                                </div>
-                            )
-                        })
-                    }
-                </div>
-            )}
-            <h2>Transaction Feed</h2>
-            {transactions.map(t => {
-                const player = players.find(p => p.id === t.player_id)
-                return (
-                    <div key={t.id}>
-                        <p>{player?.name} - ${t.amount} at {new Date(t.created_at).toLocaleTimeString()} ({t.type}) {t.status}</p>
+                    <div className="section-title">
+                        <h2>🪑 Players</h2>
+                        <span className="section-count">{players.length}</span>
                     </div>
-                )
-            })}
-        
+
+                    {players.length === 0 ? (
+                        <div className="empty-state">No players yet</div>
+                    ) : (
+                        <div className="player-list">
+                            {players.map(p => {
+                                const playerTransactions = transactions.filter(t => t.player_id === p.id && t.status === 'approved' && t.type !== 'cashout')
+                                const totalBuyIn = playerTransactions.reduce((sum,  t) => sum + t.amount, 0)
+                                const approvedCashOut = transactions.find(t => t.player_id === p.id && t.status === 'approved' && t.type === 'cashout')
+                                const profit = approvedCashOut ? approvedCashOut.amount - totalBuyIn : null
+                                const isSelf = currentPlayer && p.id === currentPlayer.id
+
+                                return(
+
+                                    <div key={p.id} className={`player-card${isSelf ? ' player-card--self' : ''}`}>
+                                        <div className="player-card__avatar">{p.name?.[0]?.toUpperCase() || '?'}</div>
+                                        <div className="player-card__info">
+                                            <span className="player-card__name">
+                                                {p.name}
+                                                {isSelf && <span className="player-card__you">You</span>}
+                                            </span>
+                                            <span className="player-card__buyin">Buy-in {formatMoney(totalBuyIn)}</span>
+                                        </div>
+                                        <div className="player-card__right">
+                                            {profit !== null && (
+                                                <span className={`profit-pill ${profit > 0 ? 'profit-pill--positive' : profit < 0 ? 'profit-pill--negative' : 'profit-pill--neutral'}`}>
+                                                    {profit > 0 ? '+' : ''}{formatMoney(profit)}
+                                                </span>
+                                            )}
+                                            {view === 'host' && (
+                                                <button className="icon-btn" onClick={() => deletePlayer(p.id)} aria-label={`Remove ${p.name}`}>✕</button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {view === 'host' && (
+                    <div className="pending-section">
+                        <div className="section-title">
+                            <h2>⏳ Pending Approvals</h2>
+                            {pendingTransactions.length > 0 && <span className="pending-count">{pendingTransactions.length}</span>}
+                        </div>
+                        {pendingTransactions.length === 0 ? (
+                            <div className="empty-state">Nothing waiting on you</div>
+                        ) : (
+                            <div className="pending-list">
+                                {pendingTransactions.map(t => {
+                                    const player = players.find(p => p.id === t.player_id)
+                                    return(
+                                        <div key={t.id} className="pending-item">
+                                            <div className="pending-item__info">
+                                                <span className="pending-item__name">{player?.name}</span>
+                                                <span className="pending-item__meta">
+                                                    <span className={`type-badge type-badge--${t.type}`}>{t.type}</span>
+                                                    {formatMoney(t.amount)}
+                                                </span>
+                                            </div>
+                                            <button className="btn btn-approve" onClick={() => handleApprove(t.id)}>Approve</button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div>
+                    <div className="section-title">
+                        <h2>📜 Transaction Feed</h2>
+                    </div>
+                    {feedTransactions.length === 0 ? (
+                        <div className="empty-state">No transactions yet</div>
+                    ) : (
+                        <div className="feed-list">
+                            {feedTransactions.map(t => {
+                                const player = players.find(p => p.id === t.player_id)
+                                return (
+                                    <div key={t.id} className={`feed-item feed-item--${t.status}`}>
+                                        <div className="feed-item__icon">{typeIcon[t.type] || '•'}</div>
+                                        <div className="feed-item__body">
+                                            <div className="feed-item__top">
+                                                <span className="feed-item__name">{player?.name}</span>
+                                                <span className="feed-item__time">{new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </div>
+                                            <div className="feed-item__desc">
+                                                <span className={`type-badge type-badge--${t.type}`}>{t.type}</span>
+                                                <span className="feed-item__amount">{formatMoney(t.amount)}</span>
+                                                <span className={`status-pill status-pill--${t.status}`}>{t.status}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
 
-        
         )
 
     }

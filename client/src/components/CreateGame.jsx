@@ -4,7 +4,7 @@ const DEFAULT_FORM = {
     date: new Date().toISOString().split('T')[0],
     location: '',
     pin: ''
-    
+
 
 }
 function CreateGame() {
@@ -26,37 +26,38 @@ function CreateGame() {
         })
 
         const data = await response.json()
-        
+
         navigate(`/game/${data.id}`)
 
-        
+
     }
 
     return (
-        <form onSubmit={handleSubmit}>
-            <h2>Create a Game</h2>
-            <label>
-                Date
-                <input type='date' name='date' value={form.date} onChange={handleChange}/> 
-            </label>
+        <div className="screen-center">
+            <div className="brand-mark">♠</div>
+            <h1 className="entry-title">New Game</h1>
+            <p className="entry-subtitle">Set up a table and share the link with players</p>
 
-            <label>
-                Location
-                <input type='text' name='location' value={form.location} onChange={handleChange}/>
-            </label>
+            <form className="form-card" style={{width: '100%'}} onSubmit={handleSubmit}>
+                <div className="form-group">
+                    <label className="form-label" htmlFor="date">Date</label>
+                    <input className="form-input" id="date" type='date' name='date' value={form.date} onChange={handleChange}/>
+                </div>
 
-            <label>
-                Pin
-                <input type='text' name='pin' value={form.pin} onChange={handleChange}/>
-            </label>
+                <div className="form-group">
+                    <label className="form-label" htmlFor="location">Location</label>
+                    <input className="form-input" id="location" type='text' name='location' placeholder="e.g. Mike's Place" value={form.location} onChange={handleChange}/>
+                </div>
 
-            <div>
-                <button type='submit'>Submit</button>
-            </div>
+                <div className="form-group">
+                    <label className="form-label" htmlFor="pin">Host PIN</label>
+                    <input className="form-input" id="pin" type='text' name='pin' placeholder="4-digit PIN" value={form.pin} onChange={handleChange}/>
+                </div>
 
-        </form>
+                <button className="btn btn-primary btn-block" type='submit'>Create Game</button>
+            </form>
+        </div>
     )
-    
+
 }
 export default CreateGame
-
