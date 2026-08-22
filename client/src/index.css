@@ -184,6 +184,7 @@ input {
 }
 
 .game-header__info {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -290,6 +291,10 @@ input {
   background: var(--surface-hover);
 }
 
+.history-btn {
+  margin-top: 14px;
+}
+
 .btn-outline-danger {
   background: transparent;
   color: var(--danger);
@@ -333,6 +338,12 @@ input {
   background: var(--danger-soft);
   color: var(--danger);
   border-color: rgba(240, 70, 106, 0.4);
+}
+
+.icon-btn--neutral:active {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border);
 }
 
 /* ---------- forms ---------- */
@@ -940,4 +951,72 @@ input {
 .status-pill--approved {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* ---------- game history list ---------- */
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.history-item:active {
+  transform: scale(0.98);
+  background: var(--surface-hover);
+}
+
+.history-item__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #2c3040, #1a1c26);
+  border: 1px solid var(--border);
+  color: var(--gold);
+}
+
+.history-item__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-item__location {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item__date {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.history-item__chevron {
+  color: var(--text-faint);
+  flex-shrink: 0;
+  font-size: 18px;
 }
