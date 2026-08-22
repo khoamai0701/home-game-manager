@@ -1,27 +1,34 @@
 import { Router } from 'express'
 import db from '../db.js'
 
-const router = Router()
 
-router.get('/:game_id', (req, res) => {
-    const { game_id } = req.params
-    const players = db.prepare('SELECT * FROM players WHERE game_id = ?').all(game_id)
+export default function(io) {
+    const router = Router()
 
-    res.json(players)
-})
+    router.get('/:game_id', (req, res) => {
+        const { game_id } = req.params
+        const players = db.prepare('SELECT * FROM players WHERE game_id = ?').all(game_id)
 
-router.post('/', (req, res) => {
-    const { game_id, name, cashOut } = req.body
-    const result = db.prepare(`INSERT INTO players (game_id, name) VALUES (?, ?)`).run(game_id, name)
+        res.json(players)
+    })
 
-    const newPlayer = db.prepare('SELECT * FROM players WHERE id = ?').get(result.lastInsertRowid)
+    router.post('/', (req, res) => {
+        const { game_id, name, cashOut } = req.body
+        const result = db.prepare(`INSERT INTO players (game_id, name) VALUES (?, ?)`).run(game_id, name)
 
-    res.status(201).json(newPlayer)
-})
+        const newPlayer = db.prepare('SELECT * FROM players WHERE id = ?').get(result.lastInsertRowid)
 
-router.delete('/:id', (req, res) => {
-    const { id } = req.params
-    db.prepare('DELETE FROM players WHERE id = ?').run(id)
-    res.status(204).send()
-})
-export default router
+        io.to(String(game_id)).emit('player-added', newPlayer)
+        res.status(201).json(newPlayer)
+    })
+
+    router.delete('/:id', (req, res) => {
+        const { id } = req.params
+        const player = db.prepare('SELECT * FROM players WHERE id = ?').get(id)
+        db.prepare('DELETE FROM players WHERE id = ?').run(id)
+        io.to(String(player.game_id)).emit('player-deleted', {id: Number(id)})
+        res.status(204).send()
+    })
+
+    return router
+}

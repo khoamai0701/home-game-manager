@@ -1,6 +1,7 @@
     import { useParams } from "react-router-dom"
     import { useEffect, useState } from "react"
     import GameEntry from './GameEntry.jsx'  
+    import { io } from 'socket.io-client'
         
     const DEFAULT_FORM = {
             name: '',
@@ -23,7 +24,30 @@
         const [previousView, setPreviousView] = useState(null)
         
 
+        useEffect(() => {
+            const socket = io('http://localhost:3002')
+            socket.emit('join-game', id)
 
+            socket.on('transaction-added', (transaction) => {
+                setTransactions(prev => [...prev, transaction])
+            })
+
+            socket.on('transaction-updated', (transaction) => {
+                setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t))
+            })
+
+            socket.on('player-added', (player) => {
+                setPlayers(prev => [...prev, player])
+            })
+
+            socket.on('player-deleted', (player) => {
+                setPlayers(prev => prev.filter(player => player.id !== playerId))
+            })
+
+            return () => {
+                socket.disconnect()
+            }
+        }, [])
         useEffect(() => {
             fetch(`/api/games/${id}`)
             .then(res => res.json())
@@ -86,7 +110,7 @@
             setCurrentPlayer(data)
             localStorage.setItem(`player_${id}`, JSON.stringify(data))
             
-            setPlayers(prev => [...prev, data])
+            
             
 
             const response2 = await fetch('/api/transactions', {
@@ -102,7 +126,7 @@
             })
 
             const transactionData = await response2.json()
-            setTransactions(prev => [...prev, transactionData])
+            
             setPlayersForm(DEFAULT_FORM)
 
         }
@@ -132,7 +156,7 @@
             })
 
             const data = await response.json()
-            setTransactions(prev => [...prev, data])
+            
             setTopOff('')
         }
 
@@ -150,19 +174,19 @@
             })
 
             const data = await response.json()
-            setTransactions(prev => [...prev, data])
+            
             setCashOut('')
             setView(previousView)
         }
         async function handleApprove(transactionId) {
             await fetch(`/api/transactions/${transactionId}`, {method: 'PATCH'} )
 
-            setTransactions(prev => prev.map(t => t.id === transactionId ? {...t, status: 'approved' } :t))
+            
         }
 
         async function deletePlayer(playerId) {
             await fetch(`/api/players/${playerId}`, {method: 'DELETE'})
-            setPlayers(prev => prev.filter(player => player.id !== playerId))
+            
             localStorage.removeItem(`player_${id}`)
             setCurrentPlayer(null)
         }

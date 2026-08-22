@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import db from '../db.js'
 
-const router = Router()
+export default function(io) {
+    const router = Router()
 
 router.get('/:game_id', (req, res) => {
     const { game_id } = req.params
@@ -19,8 +20,9 @@ router.post('/', (req, res) => {
     const result = db.prepare(`INSERT INTO transactions (player_id, game_id, created_at, amount, type, status) VALUES (?, ?, ?, ?, ?, ?)`).run(player_id, game_id, created_at, amount, type, status)
 
     const newTransaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.lastInsertRowid)
-
+    io.to(String(game_id)).emit('transaction-added', newTransaction)
     res.status(201).json(newTransaction)
+    
 })
 
 router.patch('/:id', (req, res) => {
@@ -28,8 +30,9 @@ router.patch('/:id', (req, res) => {
     const result = db.prepare(`UPDATE transactions SET status = 'approved' WHERE id = ?`).run(id)
 
     const updatedTransaciton = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
-
+    io.to(String(updatedTransaciton.game_id)).emit('transaction-updated', updatedTransaciton)
     res.json(updatedTransaciton)
+   
 
 
 
@@ -41,4 +44,5 @@ router.delete('/:id', (req, res) => {
     db.prepare('DELETE FROM transactions WHERE id = ?').run(id)
     res.status(204).send()
 })
-export default router
+    return router
+}
