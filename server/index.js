@@ -5,14 +5,16 @@ import playersRouter from './routes/players.js'
 import transactionsRouter from './routes/transactions.js'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
+import cors from 'cors'
 
 
 
 const app = express();
-const PORT = 3002
+app.use(cors({ origin: ['http://localhost:5173', 'https://home-game-manager.vercel.app'] }))
+const PORT = process.env.PORT || 3002
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
-    cors: { origin: 'http://localhost:5173'}
+    cors: { origin: ['http://localhost:5173', 'https://home-game-manager.vercel.app'] }
 })
 
 io.on('connection', (socket) => {
