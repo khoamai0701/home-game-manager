@@ -1,9 +1,11 @@
+import 'dotenv/config'
 import express from 'express'
 import gamesRouter from './routes/games.js'
 import playersRouter from './routes/players.js'
 import transactionsRouter from './routes/transactions.js'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
+
 
 
 const app = express();
