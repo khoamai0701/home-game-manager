@@ -1,30 +1,30 @@
 import { Router } from 'express'
-import db from '../db.js'
+import pool from '../db.js'
 
 const router = Router()
 
-router.get('/', (req, res) => {
-    const games = db.prepare('SELECT * FROM games ORDER BY date DESC').all()
-    res.json(games)
+router.get('/', async (req, res) => {
+    const games = await pool.query('SELECT * FROM games ORDER BY date DESC')
+    res.json(games.rows)
 })
 
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
     const { id } = req.params   
-    const selectedGame = db.prepare('SELECT * FROM games WHERE id = ?').get(id)
-    res.json(selectedGame)
+    const selectedGame = await pool.query('SELECT * FROM games WHERE id =  $1', [id])
+    res.json(selectedGame.rows[0])
 })
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     const { date, location, pin} = req.body
-    const result = db.prepare(`INSERT INTO games (date, location, pin) VALUES (?, ?, ?)`).run(date, location, pin)
-    const newGame = db.prepare('SELECT * FROM games WHERE id = ?').get(result.lastInsertRowid)
-    res.status(201).json(newGame)
+    const result = await pool.query(`INSERT INTO games (date, location, pin) VALUES ($1, $2, $3) RETURNING *`, [date, location, pin])
+    
+    res.status(201).json(result.rows[0])
 
 })
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     const { id } = req.params
-    db.prepare('DELETE FROM games WHERE id = ?').run(id)
+    pool.query('DELETE FROM games WHERE id = $1', [id])
     res.status(204).send()
 })
 

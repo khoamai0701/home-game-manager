@@ -1,35 +1,35 @@
 import { Router } from 'express'
-import db from '../db.js'
+import pool from '../db.js'
 
 export default function(io) {
     const router = Router()
 
-router.get('/:game_id', (req, res) => {
+router.get('/:game_id', async (req, res) => {
     const { game_id } = req.params
-    const transactions = db.prepare('SELECT * FROM transactions WHERE game_id = ?').all(game_id)
+    const transactions = await pool.query('SELECT * FROM transactions WHERE game_id = $1', [game_id])
 
-    res.json(transactions)
+    res.json(transactions.rows)
 
 
 })
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     const { player_id, game_id, amount, type, status } = req.body
     const created_at = new Date().toISOString()
 
-    const result = db.prepare(`INSERT INTO transactions (player_id, game_id, created_at, amount, type, status) VALUES (?, ?, ?, ?, ?, ?)`).run(player_id, game_id, created_at, amount, type, status)
+    const result = await pool.query(`INSERT INTO transactions (player_id, game_id, created_at, amount, type, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, [player_id, game_id, created_at, amount, type, status])
 
-    const newTransaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(result.lastInsertRowid)
+    const newTransaction = result.rows[0]
     io.to(String(game_id)).emit('transaction-added', newTransaction)
     res.status(201).json(newTransaction)
     
 })
 
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
     const { id } = req.params
-    const result = db.prepare(`UPDATE transactions SET status = 'approved' WHERE id = ?`).run(id)
+    const result = await pool.query(`UPDATE transactions SET status = 'approved' WHERE id = $1 RETURNING *`, [id])
 
-    const updatedTransaciton = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
+    const updatedTransaciton = result.rows[0]
     io.to(String(updatedTransaciton.game_id)).emit('transaction-updated', updatedTransaciton)
     res.json(updatedTransaciton)
    
@@ -38,10 +38,10 @@ router.patch('/:id', (req, res) => {
 
 })
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     const { id } = req.params
 
-    db.prepare('DELETE FROM transactions WHERE id = ?').run(id)
+    await pool.query('DELETE FROM transactions WHERE id = $1', [id])
     res.status(204).send()
 })
     return router
