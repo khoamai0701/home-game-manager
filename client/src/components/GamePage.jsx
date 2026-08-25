@@ -22,7 +22,8 @@
         const [transactions, setTransactions] = useState([])
         const [cashOut, setCashOut] = useState('')
         const [previousView, setPreviousView] = useState(null)
-        
+        const [linkCopied, setLinkCopied] = useState(false)
+
 
         useEffect(() => {
             const socket = io('http://localhost:3002')
@@ -184,6 +185,23 @@
             
         }
 
+        async function handleShare() {
+            const url = `${window.location.origin}/game/${id}`
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: `${game.location} — Poker Game`, text: 'Join my poker game', url })
+                } catch (err) {
+                    // user dismissed the share sheet
+                }
+                return
+            }
+
+            await navigator.clipboard.writeText(url)
+            setLinkCopied(true)
+            setTimeout(() => setLinkCopied(false), 2000)
+        }
+
         async function deletePlayer(playerId) {
             await fetch(`/api/players/${playerId}`, {method: 'DELETE'})
             
@@ -258,7 +276,14 @@
                     <span className="game-header__location">{game.location}</span>
                     <span className="game-header__date">{game.date}</span>
                 </div>
-                {view === 'host' && <span className="role-badge role-badge--host">👑 Host</span>}
+                {view === 'host' && (
+                    <div className="game-header__actions">
+                        <button className="icon-btn icon-btn--neutral" onClick={handleShare} aria-label="Share game link">
+                            {linkCopied ? '✓' : '🔗'}
+                        </button>
+                        <span className="role-badge role-badge--host">👑 Host</span>
+                    </div>
+                )}
                 {view === 'player' && currentPlayer && <span className="role-badge role-badge--player">🂡 {currentPlayer.name}</span>}
             </div>
 
