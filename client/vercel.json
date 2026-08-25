@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://home-game-manager-production.up.railway.app/api/:path*"
+    }
+  ]
+}
