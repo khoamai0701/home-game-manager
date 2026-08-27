@@ -1,8 +1,20 @@
     import { useParams } from "react-router-dom"
-    import { useEffect, useState } from "react"
-    import GameEntry from './GameEntry.jsx'  
+    import { useEffect, useRef, useState } from "react"
+    import GameEntry from './GameEntry.jsx'
+    import PlayerTransactionsModal from './PlayerTransactionsModal.jsx'
     import { io } from 'socket.io-client'
-        
+
+    // REST calls go through the Vercel rewrite / Vite proxy at `/api`, but a
+    // websocket can't use that proxy — it needs an absolute origin. Prefer an
+    // explicit env var, otherwise fall back to the known backend in prod and to
+    // the local dev server otherwise. (Pointing at localhost in prod is why live
+    // updates never arrived and users had to refresh.)
+    const SOCKET_URL =
+        import.meta.env.VITE_API_URL ||
+        (import.meta.env.PROD
+            ? 'https://home-game-manager-production.up.railway.app'
+            : 'http://localhost:3002')
+
     const DEFAULT_FORM = {
             name: '',
             buyIn: ''
@@ -16,79 +28,133 @@
         const [error, setError] = useState(null)
         const [currentPlayer, setCurrentPlayer] = useState(null)
         const [topOff, setTopOff] = useState('')
-        
+
 
         const [playersForm, setPlayersForm] = useState(DEFAULT_FORM)
         const [transactions, setTransactions] = useState([])
         const [cashOut, setCashOut] = useState('')
         const [previousView, setPreviousView] = useState(null)
         const [linkCopied, setLinkCopied] = useState(false)
+        const [toast, setToast] = useState(null)
+        const [confirmDeletePlayer, setConfirmDeletePlayer] = useState(null)
+        const [historyPlayer, setHistoryPlayer] = useState(null)
 
+        // Socket listeners are attached once per game id; use a ref so those
+        // closures can see the *current* player without re-subscribing.
+        const currentPlayerRef = useRef(null)
+        useEffect(() => { currentPlayerRef.current = currentPlayer }, [currentPlayer])
+
+        const toastTimer = useRef(null)
+        function showToast(message) {
+            setToast(message)
+            window.clearTimeout(toastTimer.current)
+            toastTimer.current = window.setTimeout(() => setToast(null), 2800)
+        }
 
         useEffect(() => {
-            const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3002')
+            if (!id) return
+
+            const socket = io(SOCKET_URL)
             socket.emit('join-game', id)
 
             socket.on('transaction-added', (transaction) => {
-                setTransactions(prev => [...prev, transaction])
+                setTransactions(prev =>
+                    prev.some(t => t.id === transaction.id) ? prev : [...prev, transaction]
+                )
             })
 
             socket.on('transaction-updated', (transaction) => {
                 setTransactions(prev => prev.map(t => t.id === transaction.id ? transaction : t))
             })
 
-            socket.on('player-added', (player) => {
-                setPlayers(prev => [...prev, player])
+            socket.on('transaction-deleted', ({ id: deletedId }) => {
+                setTransactions(prev => prev.filter(t => t.id !== deletedId))
             })
 
-            socket.on('player-deleted', (player) => {
-                setPlayers(prev => prev.filter(player => player.id !== playerId))
+            socket.on('player-added', (player) => {
+                setPlayers(prev =>
+                    prev.some(p => p.id === player.id) ? prev : [...prev, player]
+                )
+            })
+
+            socket.on('player-deleted', ({ id: deletedId }) => {
+                setPlayers(prev => prev.filter(p => p.id !== deletedId))
+                setTransactions(prev => prev.filter(t => t.player_id !== deletedId))
+
+                if (currentPlayerRef.current && currentPlayerRef.current.id === deletedId) {
+                    localStorage.removeItem(`player_${id}`)
+                    setCurrentPlayer(null)
+                    setHistoryPlayer(null)
+                    if (!localStorage.getItem(`host_${id}`)) {
+                        setView('entry')
+                        showToast('Your session was removed by the host')
+                    }
+                }
             })
 
             return () => {
                 socket.disconnect()
             }
-        }, [])
+        }, [id])
+
         useEffect(() => {
+            let cancelled = false
+
+            // Restore the saved session immediately from localStorage so a slow or
+            // failed players fetch can never drop a valid session (the old code only
+            // restored inside the fetch's .then, so any hiccup logged the player out).
+            const saved = localStorage.getItem(`player_${id}`)
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved)
+                    if (parsed && parsed.id != null) {
+                        setCurrentPlayer(parsed)
+                        setView('player')
+                    }
+                } catch {
+                    localStorage.removeItem(`player_${id}`)
+                }
+            }
+            if (localStorage.getItem(`host_${id}`)) {
+                setView('host')
+            }
+
             fetch(`/api/games/${id}`)
-            .then(res => res.json())
-            .then(data => setGame(data) )
+                .then(res => res.json())
+                .then(data => { if (!cancelled) setGame(data) })
+                .catch(() => {})
 
             fetch(`/api/players/${id}`)
-            .then(res => res.json())
-            .then(data => { 
-                setPlayers(data)
-                
-                const saved = localStorage.getItem(`player_${id}`)
+                .then(res => (res.ok ? res.json() : Promise.reject(new Error('players fetch failed'))))
+                .then(data => {
+                    if (cancelled || !Array.isArray(data)) return
+                    setPlayers(data)
 
-                const hostSaved = localStorage.getItem(`host_${id}`)
-                if (saved) {
-
-                    const parsed = JSON.parse(saved)
-                    if (data.find(p => p.id === parsed.id)) { //checks to see if the player in localStorage is still in database
-                         setCurrentPlayer(JSON.parse(saved))
-                         setView('player')
-
-                    } else {
+                    // Only reconcile against a *confirmed* list: if the saved player
+                    // genuinely no longer exists, clear the session; otherwise keep it.
+                    const savedRaw = localStorage.getItem(`player_${id}`)
+                    if (!savedRaw) return
+                    try {
+                        const parsed = JSON.parse(savedRaw)
+                        if (data.some(p => p.id === parsed.id)) {
+                            setCurrentPlayer(parsed)
+                        } else {
+                            localStorage.removeItem(`player_${id}`)
+                            setCurrentPlayer(null)
+                            if (!localStorage.getItem(`host_${id}`)) setView('entry')
+                        }
+                    } catch {
                         localStorage.removeItem(`player_${id}`)
                     }
-                   
-                } 
-
-                if (hostSaved) {
-                    setView('host')
-                }
-
-            })
+                })
+                .catch(() => { /* transient failure: keep the optimistic session */ })
 
             fetch(`/api/transactions/${id}`)
-            .then(res => res.json())
-            .then(data => setTransactions(data) )
+                .then(res => res.json())
+                .then(data => { if (!cancelled && Array.isArray(data)) setTransactions(data) })
+                .catch(() => {})
 
-            
-
-
-
+            return () => { cancelled = true }
         }, [id])
 
         function handleChange(e) {
@@ -97,7 +163,7 @@
         }
         async function handleSubmit(e) {
             e.preventDefault()
-            
+
 
             const response = await fetch('/api/players', {
                 method: 'POST',
@@ -105,14 +171,13 @@
                 body: JSON.stringify({...playersForm, game_id: id})
 
             })
-            
+
 
             const data = await response.json()
             setCurrentPlayer(data)
             localStorage.setItem(`player_${id}`, JSON.stringify(data))
-            
-            
-            
+
+
 
             const response2 = await fetch('/api/transactions', {
                 method: 'POST',
@@ -126,8 +191,8 @@
                 })
             })
 
-            const transactionData = await response2.json()
-            
+            await response2.json()
+
             setPlayersForm(DEFAULT_FORM)
 
         }
@@ -150,14 +215,14 @@
                 body: JSON.stringify({
                     player_id: currentPlayer.id,
                     game_id: id,
-                    amount: topOff,
+                    amount: Number(topOff),
                     type: 'topoff',
                     status: 'pending'
                 })
             })
 
-            const data = await response.json()
-            
+            await response.json()
+
             setTopOff('')
         }
 
@@ -168,21 +233,50 @@
                 body: JSON.stringify({
                     player_id: currentPlayer.id,
                     game_id: id,
-                    amount: cashOut,
+                    amount: Number(cashOut),
                     type: 'cashout',
                     status: 'pending'
                 })
             })
 
-            const data = await response.json()
-            
+            await response.json()
+
             setCashOut('')
             setView(previousView)
         }
         async function handleApprove(transactionId) {
-            await fetch(`/api/transactions/${transactionId}`, {method: 'PATCH'} )
+            await fetch(`/api/transactions/${transactionId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ status: 'approved' })
+            })
+        }
 
-            
+        async function handleReject(transactionId) {
+            await fetch(`/api/transactions/${transactionId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ status: 'rejected' })
+            })
+            showToast('Request rejected')
+        }
+
+        async function handleUpdateAmount(transactionId, amount) {
+            const res = await fetch(`/api/transactions/${transactionId}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ amount })
+            })
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}))
+                showToast(body.error || 'Could not update amount')
+                return
+            }
+            const updated = await res.json()
+            // The socket broadcast also updates state, but update locally too so
+            // the host sees the correction immediately.
+            setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t))
+            showToast('Amount updated')
         }
 
         async function handleShare() {
@@ -191,7 +285,7 @@
             if (navigator.share) {
                 try {
                     await navigator.share({ title: `${game.location} — Poker Game`, text: 'Join my poker game', url })
-                } catch (err) {
+                } catch {
                     // user dismissed the share sheet
                 }
                 return
@@ -202,11 +296,33 @@
             setTimeout(() => setLinkCopied(false), 2000)
         }
 
-        async function deletePlayer(playerId) {
-            await fetch(`/api/players/${playerId}`, {method: 'DELETE'})
-            
-            localStorage.removeItem(`player_${id}`)
-            setCurrentPlayer(null)
+        async function confirmDelete() {
+            const player = confirmDeletePlayer
+            if (!player) return
+            setConfirmDeletePlayer(null)
+
+            const isSelf = currentPlayer && currentPlayer.id === player.id
+
+            const res = await fetch(`/api/players/${player.id}`, {method: 'DELETE'})
+
+            if (!res.ok && res.status !== 404) {
+                showToast('Could not remove player')
+                return
+            }
+
+            // Update locally right away (don't wait on the socket round-trip).
+            setPlayers(prev => prev.filter(p => p.id !== player.id))
+            setTransactions(prev => prev.filter(t => t.player_id !== player.id))
+            if (historyPlayer && historyPlayer.id === player.id) setHistoryPlayer(null)
+
+            if (isSelf) {
+                localStorage.removeItem(`player_${id}`)
+                setCurrentPlayer(null)
+                setView(localStorage.getItem(`host_${id}`) ? 'host' : 'entry')
+                showToast('You left the game')
+            } else {
+                showToast(`Removed ${player.name}`)
+            }
         }
 
         if (!game) return <div className="loading-screen"><span className="spinner"></span>Loading table…</div>
@@ -214,13 +330,20 @@
 
 
 
+        const toastEl = toast && <div className="toast">{toast}</div>
 
         if (view === 'entry') {
-            return <GameEntry onSelectHost ={() => setView('pin')} onSelectPlayer = {() => setView('player')}/>
+            return (
+                <>
+                    {toastEl}
+                    <GameEntry onSelectHost={() => setView('pin')} onSelectPlayer={() => setView('player')}/>
+                </>
+            )
         }
 
         if (view === 'pin') return (
             <div className="screen-center">
+                {toastEl}
                 <div className="pin-card">
                     <div className="brand-mark" style={{ marginBottom: 0 }}>🔒</div>
                     <h2>Enter Host PIN</h2>
@@ -242,6 +365,7 @@
 
         if (view === 'cashOut') return (
             <div className="screen-center">
+                {toastEl}
                 <div className="cashout-card">
                     <h1>Cash Out</h1>
                     <p className="cashout-card__sub">Enter your final stack to request a cash out</p>
@@ -269,8 +393,19 @@
         const typeIcon = { buyin: '💵', topoff: '🔄', cashout: '💰' }
         const formatMoney = n => `$${Number(n).toLocaleString()}`
 
+        // ----- cash flow summary (host) -----
+        const approvedTx = transactions.filter(t => t.status === 'approved')
+        const totalIn = approvedTx
+            .filter(t => t.type !== 'cashout')
+            .reduce((sum, t) => sum + Number(t.amount), 0)
+        const totalOut = approvedTx
+            .filter(t => t.type === 'cashout')
+            .reduce((sum, t) => sum + Number(t.amount), 0)
+        const netCashFlow = totalOut - totalIn // 0 when every chip is accounted for
+
     return (
         <div className="app-shell">
+            {toastEl}
             <div className="game-header">
                 <div className="game-header__info">
                     <span className="game-header__location">{game.location}</span>
@@ -288,6 +423,25 @@
             </div>
 
             <div className="page-content">
+                {view === 'host' && (
+                    <div className="summary-bar">
+                        <div className="summary-stat">
+                            <span className="summary-stat__label">Buy-ins</span>
+                            <span className="summary-stat__value">{formatMoney(totalIn)}</span>
+                        </div>
+                        <div className="summary-stat">
+                            <span className="summary-stat__label">Cash-outs</span>
+                            <span className="summary-stat__value">{formatMoney(totalOut)}</span>
+                        </div>
+                        <div className="summary-stat">
+                            <span className="summary-stat__label">{netCashFlow === 0 ? 'Settled' : 'On table'}</span>
+                            <span className={`summary-stat__value ${netCashFlow < 0 ? 'summary-stat__value--negative' : 'summary-stat__value--positive'}`}>
+                                {formatMoney(Math.abs(netCashFlow))}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {currentPlayer ? (
                     <div className="action-panel">
                         <div className="action-panel__title">Top Off Your Stack</div>
@@ -332,7 +486,7 @@
                         <div className="player-list">
                             {players.map(p => {
                                 const playerTransactions = transactions.filter(t => t.player_id === p.id && t.status === 'approved' && t.type !== 'cashout')
-                                const totalBuyIn = playerTransactions.reduce((sum,  t) => sum + t.amount, 0)
+                                const totalBuyIn = playerTransactions.reduce((sum,  t) => sum + Number(t.amount), 0)
                                 const approvedCashOut = transactions.find(t => t.player_id === p.id && t.status === 'approved' && t.type === 'cashout')
                                 const profit = approvedCashOut ? approvedCashOut.amount - totalBuyIn : null
                                 const isSelf = currentPlayer && p.id === currentPlayer.id
@@ -355,7 +509,10 @@
                                                 </span>
                                             )}
                                             {view === 'host' && (
-                                                <button className="icon-btn" onClick={() => deletePlayer(p.id)} aria-label={`Remove ${p.name}`}>✕</button>
+                                                <>
+                                                    <button className="icon-btn icon-btn--neutral" onClick={() => setHistoryPlayer(p)} aria-label={`Edit ${p.name}'s transactions`}>✎</button>
+                                                    <button className="icon-btn" onClick={() => setConfirmDeletePlayer(p)} aria-label={`Remove ${p.name}`}>✕</button>
+                                                </>
                                             )}
                                         </div>
                                     </div>
@@ -387,7 +544,10 @@
                                                     {formatMoney(t.amount)}
                                                 </span>
                                             </div>
-                                            <button className="btn btn-approve" onClick={() => handleApprove(t.id)}>Approve</button>
+                                            <div className="pending-item__actions">
+                                                <button className="btn btn-approve" onClick={() => handleApprove(t.id)}>Approve</button>
+                                                <button className="btn btn-reject" onClick={() => handleReject(t.id)}>Reject</button>
+                                            </div>
                                         </div>
                                     )
                                 })}
@@ -427,6 +587,30 @@
                     )}
                 </div>
             </div>
+
+            {confirmDeletePlayer && (
+                <div className="modal-overlay" onClick={() => setConfirmDeletePlayer(null)}>
+                    <div className="modal-card modal-card--sm" onClick={e => e.stopPropagation()}>
+                        <h2>Remove {confirmDeletePlayer.name}?</h2>
+                        <p className="modal-subtitle">This also deletes their buy-ins and transactions. This can't be undone.</p>
+                        <div className="btn-column">
+                            <button className="btn btn-outline-danger btn-block" onClick={confirmDelete}>Remove player</button>
+                            <button className="btn btn-secondary btn-block" onClick={() => setConfirmDeletePlayer(null)}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {historyPlayer && (
+                <PlayerTransactionsModal
+                    player={historyPlayer}
+                    transactions={transactions}
+                    onClose={() => setHistoryPlayer(null)}
+                    onUpdateAmount={handleUpdateAmount}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                />
+            )}
         </div>
 
         )

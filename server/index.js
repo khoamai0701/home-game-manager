@@ -21,16 +21,27 @@ io.on('connection', (socket) => {
 
     console.log('a user connected')
     socket.on('join-game', (gameId) => {
-        socket.join(gameId)
-        console.log(`socket joined game ${gameId}`)
+        // Always join as a string. Room names the server emits to are built with
+        // String(game_id) (game_id comes back from Postgres as a number), so the
+        // socket must join the string-typed room or io.to(...) never reaches it.
+        const room = String(gameId)
+        socket.join(room)
+        console.log(`socket joined game ${room}`)
     })
-    
+
 })
 
 app.use(express.json())
 app.use('/api/games', gamesRouter)
 app.use('/api/players', playersRouter(io))
 app.use('/api/transactions', transactionsRouter(io))
+
+// Fallback error handler so a thrown/rejected route handler returns JSON
+// instead of a bare 500 (or crashing the process on older Express).
+app.use((err, req, res, next) => {
+    console.error(err)
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error' })
+})
 
 httpServer.listen(PORT,() =>{
     console.log(`Server running on http://localhost:${PORT}`)

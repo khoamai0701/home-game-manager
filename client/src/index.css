@@ -960,6 +960,233 @@ input {
   color: var(--accent);
 }
 
+.status-pill--rejected {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.feed-item--rejected {
+  border-left-color: var(--danger);
+  opacity: 0.75;
+}
+
+.feed-item--rejected .feed-item__amount {
+  text-decoration: line-through;
+  color: var(--text-faint);
+}
+
+/* ---------- cash flow summary (host) ---------- */
+
+.summary-bar {
+  display: flex;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.summary-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.summary-stat + .summary-stat {
+  border-left: 1px solid var(--border-soft);
+}
+
+.summary-stat__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.summary-stat__value {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.summary-stat__value--positive {
+  color: var(--accent);
+}
+
+.summary-stat__value--negative {
+  color: var(--warning);
+}
+
+/* ---------- reject button ---------- */
+
+.btn-reject {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid rgba(240, 70, 106, 0.35);
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.btn-reject:active {
+  background: rgba(240, 70, 106, 0.25);
+}
+
+.pending-item__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ---------- toast ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: calc(100% - 32px);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-pop);
+  border-radius: 999px;
+  padding: 11px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  animation: toast-in 0.18s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+/* ---------- modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(6, 7, 10, 0.7);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+}
+
+@media (min-width: 520px) {
+  .modal-overlay {
+    align-items: center;
+  }
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-card--sm {
+  align-self: center;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-subtitle {
+  display: block;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+.modal-tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-tx-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.modal-tx-row--pending {
+  border-left-color: var(--warning);
+}
+
+.modal-tx-row--approved {
+  border-left-color: var(--accent);
+}
+
+.modal-tx-row--rejected {
+  border-left-color: var(--danger);
+  opacity: 0.75;
+}
+
+.modal-tx-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-tx-row__edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-tx-row__dollar {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.modal-tx-row__input {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 15px;
+}
+
+.modal-tx-row__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-tx-row__actions .btn {
+  flex: 1;
+}
+
 /* ---------- game history list ---------- */
 
 .history-list {

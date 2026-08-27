@@ -24,8 +24,19 @@ export default function(io) {
     router.delete('/:id', async (req, res) => {
         const { id } = req.params
         const player = await pool.query('SELECT * FROM players WHERE id = $1', [id])
+
+        if (player.rowCount === 0) {
+            return res.status(404).json({ error: `Player ${id} not found` })
+        }
+
+        const { game_id } = player.rows[0]
+
+        // Remove the player's transactions too, otherwise their buy-ins keep
+        // counting toward the game's totals / cash-flow summary forever.
+        await pool.query('DELETE FROM transactions WHERE player_id = $1', [id])
         await pool.query('DELETE FROM players WHERE id = $1', [id])
-        io.to(String(player.rows[0].game_id)).emit('player-deleted', {id: Number(id)})
+
+        io.to(String(game_id)).emit('player-deleted', { id: Number(id) })
         res.status(204).send()
     })
 
