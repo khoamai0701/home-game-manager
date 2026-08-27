@@ -70,11 +70,14 @@ router.patch('/:id', async (req, res) => {
     }
 
     const updatedTransaction = result.rows[0]
-    io.to(String(updatedTransaction.game_id)).emit('transaction-updated', updatedTransaction)
+    const room = String(updatedTransaction.game_id)
 
     let warning = null
 
-    // A cash-out's approval state drives the player's cashed_out lock.
+    // Everything below is *secondary* to the approval itself. It must never be
+    // able to turn a successful update into a 500 — otherwise the client sees
+    // the approval land over the socket but gets an error body with no warning.
+    // (That was the bug: the totals query ran unguarded, after the emit.)
     if (updatedTransaction.type === 'cashout') {
         const nowApproved = updatedTransaction.status === 'approved'
 
@@ -84,7 +87,7 @@ router.patch('/:id', async (req, res) => {
                 [nowApproved, updatedTransaction.player_id]
             )
             if (playerResult.rowCount > 0) {
-                io.to(String(updatedTransaction.game_id)).emit('player-updated', playerResult.rows[0])
+                io.to(room).emit('player-updated', playerResult.rows[0])
             }
         } catch (err) {
             // Column missing = migrate.js hasn't been run yet. Don't fail the
@@ -95,21 +98,32 @@ router.patch('/:id', async (req, res) => {
         // Table-wide chip-conservation check: warn (never block) if approving
         // this cash-out makes total approved cash-outs exceed total buy-ins.
         if (nowApproved) {
-            const totals = await pool.query(
-                `SELECT
-                    COALESCE(SUM(amount) FILTER (WHERE type <> 'cashout'), 0) AS total_in,
-                    COALESCE(SUM(amount) FILTER (WHERE type = 'cashout'), 0) AS total_out
-                 FROM transactions
-                 WHERE game_id = $1 AND status = 'approved'`,
-                [updatedTransaction.game_id]
-            )
-            const { total_in, total_out } = totals.rows[0]
-            if (Number(total_out) > Number(total_in)) {
-                warning = `Heads up: approved cash-outs ($${Number(total_out).toLocaleString()}) now exceed approved buy-ins ($${Number(total_in).toLocaleString()}) for this game.`
+            try {
+                const totals = await pool.query(
+                    `SELECT
+                        COALESCE(SUM(amount) FILTER (WHERE type <> 'cashout'), 0) AS total_in,
+                        COALESCE(SUM(amount) FILTER (WHERE type = 'cashout'), 0) AS total_out
+                     FROM transactions
+                     WHERE game_id = $1 AND status = 'approved'`,
+                    [updatedTransaction.game_id]
+                )
+                const totalIn = Number(totals.rows[0].total_in)
+                const totalOut = Number(totals.rows[0].total_out)
+                if (totalOut > totalIn) {
+                    warning = `Heads up: approved cash-outs ($${totalOut.toLocaleString()}) now exceed approved buy-ins ($${totalIn.toLocaleString()}) for this game.`
+                }
+                console.log('[cashout approval] tx', updatedTransaction.id, 'game', updatedTransaction.game_id, '-> totals:', { totalIn, totalOut }, 'warning:', warning)
+            } catch (err) {
+                console.error('[cashout approval] totals/warning check failed:', err.message)
             }
         }
     }
 
+    // Emit + respond exactly once, always.
+    io.to(room).emit('transaction-updated', updatedTransaction)
+    if (warning) io.to(room).emit('cashflow-warning', { warning, game_id: updatedTransaction.game_id })
+
+    console.log('[PATCH /transactions] responding', { id: updatedTransaction.id, type: updatedTransaction.type, status: updatedTransaction.status, warning })
     res.json({ ...updatedTransaction, warning })
 })
 

@@ -46,7 +46,14 @@
         useEffect(() => { currentPlayerRef.current = currentPlayer }, [currentPlayer])
 
         const toastTimer = useRef(null)
+        const lastToastRef = useRef({ message: null, at: 0 })
         function showToast(message) {
+            if (!message) return
+            // Same message twice within 4s = a duplicate (e.g. the cash-flow
+            // warning arriving over both the socket and the HTTP response).
+            const now = Date.now()
+            if (lastToastRef.current.message === message && now - lastToastRef.current.at < 4000) return
+            lastToastRef.current = { message, at: now }
             setToast(message)
             window.clearTimeout(toastTimer.current)
             toastTimer.current = window.setTimeout(() => setToast(null), 2800)
@@ -95,6 +102,12 @@
                 }
             })
 
+            // Primary delivery for the cash-flow warning: same real-time channel
+            // that already reliably delivers the approval itself. Only the host
+            // acts on it. Deduped against the copy handleApprove may also show.
+            socket.on('cashflow-warning', ({ warning }) => {
+                if (warning && localStorage.getItem(`host_${id}`)) showToast(warning)
+            })
 
             socket.on('player-deleted', ({ id: deletedId }) => {
                 setPlayers(prev => prev.filter(p => p.id !== deletedId))
@@ -281,8 +294,23 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ status: 'approved' })
             })
-            const body = await res.json().catch(() => ({}))
-            if (body.warning) showToast(body.warning)
+
+            let body = null
+            try {
+                body = await res.json()
+            } catch (err) {
+                console.error('[handleApprove] could not read response body', res.status, err)
+            }
+
+            if (!res.ok) {
+                console.error('[handleApprove] approval failed', res.status, body)
+                return
+            }
+
+            console.log('[handleApprove] ok', body)
+            // Backup path — the warning normally arrives over the socket
+            // ('cashflow-warning'); showToast dedupes so this is harmless.
+            if (body && body.warning) showToast(body.warning)
         }
 
         async function handleReject(transactionId) {
