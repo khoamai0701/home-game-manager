@@ -38,6 +38,7 @@
         const [toast, setToast] = useState(null)
         const [confirmDeletePlayer, setConfirmDeletePlayer] = useState(null)
         const [historyPlayer, setHistoryPlayer] = useState(null)
+        const [showClaimList, setShowClaimList] = useState(false)
 
         // Socket listeners are attached once per game id; use a ref so those
         // closures can see the *current* player without re-subscribing.
@@ -50,6 +51,15 @@
             window.clearTimeout(toastTimer.current)
             toastTimer.current = window.setTimeout(() => setToast(null), 2800)
         }
+
+        // A player is locked once their cash-out is approved. Use the server flag
+        // when present, but also derive it from transactions so this still works
+        // before migrate.js adds players.cashed_out.
+        const myCashouts = currentPlayer
+            ? transactions.filter(t => t.player_id === currentPlayer.id && t.type === 'cashout')
+            : []
+        const isCashedOut = Boolean(currentPlayer?.cashed_out) || myCashouts.some(t => t.status === 'approved')
+        const myPendingCashout = myCashouts.some(t => t.status === 'pending')
 
         useEffect(() => {
             if (!id) return
@@ -76,6 +86,15 @@
                     prev.some(p => p.id === player.id) ? prev : [...prev, player]
                 )
             })
+
+            socket.on('player-updated', (player) => {
+                setPlayers(prev => prev.map(p => p.id === player.id ? player : p))
+                if (currentPlayerRef.current && currentPlayerRef.current.id === player.id) {
+                    setCurrentPlayer(player)
+                    localStorage.setItem(`player_${id}`, JSON.stringify(player))
+                }
+            })
+
 
             socket.on('player-deleted', ({ id: deletedId }) => {
                 setPlayers(prev => prev.filter(p => p.id !== deletedId))
@@ -208,7 +227,18 @@
 
         }
 
+        function claimPlayer(player) {
+            // Reconnect to an existing player record (lost localStorage / new
+            // device). Same persistence path as handleSubmit after a new signup.
+            setCurrentPlayer(player)
+            localStorage.setItem(`player_${id}`, JSON.stringify(player))
+            setShowClaimList(false)
+            setView('player')
+            showToast(`Welcome back, ${player.name}`)
+        }
+
         async function handleTopOff() {
+            if (isCashedOut || myPendingCashout) return
             const response = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: {'Content-type' : 'application/json'},
@@ -227,6 +257,7 @@
         }
 
         async function handleCashOutSubmit() {
+            if (isCashedOut || myPendingCashout) { setView(previousView); return }
             const response = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: {'Content-type' : 'application/json'},
@@ -245,11 +276,13 @@
             setView(previousView)
         }
         async function handleApprove(transactionId) {
-            await fetch(`/api/transactions/${transactionId}`, {
+            const res = await fetch(`/api/transactions/${transactionId}`, {
                 method: 'PATCH',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ status: 'approved' })
             })
+            const body = await res.json().catch(() => ({}))
+            if (body.warning) showToast(body.warning)
         }
 
         async function handleReject(transactionId) {
@@ -363,6 +396,21 @@
             </div>
         )
 
+        if (view === 'cashOut' && (isCashedOut || myPendingCashout)) return (
+            <div className="screen-center">
+                {toastEl}
+                <div className="cashout-card">
+                    <h1>{isCashedOut ? 'Already Cashed Out' : 'Cash-Out Pending'}</h1>
+                    <p className="cashout-card__sub">
+                        {isCashedOut
+                            ? 'Your cash-out has already been approved.'
+                            : 'You already have a cash-out waiting for host approval.'}
+                    </p>
+                    <button className="btn btn-secondary btn-block" onClick={() => setView(previousView || 'player')}>Back</button>
+                </div>
+            </div>
+        )
+
         if (view === 'cashOut') return (
             <div className="screen-center">
                 {toastEl}
@@ -443,35 +491,70 @@
                 )}
 
                 {currentPlayer ? (
-                    <div className="action-panel">
-                        <div className="action-panel__title">Top Off Your Stack</div>
-                        <div className="action-panel__row">
-                            <input
-                                className="form-input"
-                                type="number"
-                                placeholder="Amount"
-                                value={topOff}
-                                onChange={e => setTopOff(e.target.value)}
-                            />
+                    isCashedOut ? (
+                        <div className="action-panel action-panel--locked">
+                            <div className="action-panel__title">You're Cashed Out</div>
+                            <p className="action-panel__note">Your cash-out has been approved — your night is settled. See you next game.</p>
                         </div>
-                        <div className="action-panel__buttons">
-                            <button className="btn btn-primary" type="submit" onClick={handleTopOff}>Top Off</button>
-                            <button className="btn btn-outline-danger" onClick={() => { setPreviousView(view); setView('cashOut')}}>Cash Out</button>
+                    ) : myPendingCashout ? (
+                        <div className="action-panel action-panel--locked">
+                            <div className="action-panel__title">Cash-Out Requested</div>
+                            <p className="action-panel__note">Waiting for the host to approve your cash-out. Top-offs are paused.</p>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="action-panel">
+                            <div className="action-panel__title">Top Off Your Stack</div>
+                            <div className="action-panel__row">
+                                <input
+                                    className="form-input"
+                                    type="number"
+                                    placeholder="Amount"
+                                    value={topOff}
+                                    onChange={e => setTopOff(e.target.value)}
+                                />
+                            </div>
+                            <div className="action-panel__buttons">
+                                <button className="btn btn-primary" type="submit" onClick={handleTopOff}>Top Off</button>
+                                <button className="btn btn-outline-danger" onClick={() => { setPreviousView(view); setView('cashOut')}}>Cash Out</button>
+                            </div>
+                        </div>
+                    )
                 ): (
-                    <form className="form-card" onSubmit={handleSubmit}>
-                        <h2>Add a Player</h2>
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="name">Name</label>
-                            <input className="form-input" id="name" type="text" name="name" placeholder="Player name" value={playersForm.name} onChange={handleChange}></input>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label" htmlFor="buyIn">Buy-in</label>
-                            <input className="form-input" id="buyIn" type="number" name="buyIn" placeholder="0" value={playersForm.buyIn} onChange={handleChange}></input>
-                        </div>
-                        <button className="btn btn-primary btn-block" type="submit">Add Player</button>
-                    </form>
+                    <div>
+                        <form className="form-card" onSubmit={handleSubmit}>
+                            <h2>Add a Player</h2>
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="name">Name</label>
+                                <input className="form-input" id="name" type="text" name="name" placeholder="Player name" value={playersForm.name} onChange={handleChange}></input>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label" htmlFor="buyIn">Buy-in</label>
+                                <input className="form-input" id="buyIn" type="number" name="buyIn" placeholder="0" value={playersForm.buyIn} onChange={handleChange}></input>
+                            </div>
+                            <button className="btn btn-primary btn-block" type="submit">Add Player</button>
+                        </form>
+
+                        {players.length > 0 && (
+                            <div className="claim-block">
+                                <button className="link-btn" onClick={() => setShowClaimList(v => !v)}>
+                                    {showClaimList ? 'Never mind' : 'Already joined? Tap your name'}
+                                </button>
+
+                                {showClaimList && (
+                                    <div className="claim-list">
+                                        {players.map(p => (
+                                            <button key={p.id} className="claim-item" onClick={() => claimPlayer(p)}>
+                                                <span className="claim-item__avatar">{p.name?.[0]?.toUpperCase() || '?'}</span>
+                                                <span className="claim-item__name">{p.name}</span>
+                                                {p.cashed_out && <span className="claim-item__tag">cashed out</span>}
+                                                <span className="claim-item__chevron">›</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 <div>
