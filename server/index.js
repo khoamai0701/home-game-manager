@@ -8,6 +8,7 @@ import { Server } from 'socket.io'
 import cors from 'cors'
 import passport from './auth.js'
 import jwt from 'jsonwebtoken'
+import requireAuth from './middleware/requireAuth.js'
 
 
 
@@ -36,7 +37,7 @@ io.on('connection', (socket) => {
 app.use(express.json())
 app.use('/api/games', gamesRouter)
 app.use('/api/players', playersRouter(io))
-app.use('/api/transactions', transactionsRouter(io))
+app.use('/api/transactions', requireAuth,  transactionsRouter(io))
 app.get('/api/auth/google', passport.authenticate('google', {scope: ['profile', 'email']}))
 app.get('/api/auth/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
     const token = jwt.sign({ userId: req.user.id}, process.env.JWT_SECRET, {expiresIn: '7d'})

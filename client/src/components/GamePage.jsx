@@ -19,6 +19,10 @@
             name: '',
             buyIn: ''
         }
+    function authHeaders() {
+        const token = localStorage.getItem('token')
+        return { Authorization: `Bearer ${token}`}
+    }
     function GamePage() {
         const { id } = useParams()
         const [game, setGame] = useState()
@@ -181,7 +185,9 @@
                 })
                 .catch(() => { /* transient failure: keep the optimistic session */ })
 
-            fetch(`/api/transactions/${id}`)
+            fetch(`/api/transactions/${id}`, {
+                headers: authHeaders()
+            })
                 .then(res => res.json())
                 .then(data => { if (!cancelled && Array.isArray(data)) setTransactions(data) })
                 .catch(() => {})
@@ -213,7 +219,7 @@
 
             const response2 = await fetch('/api/transactions', {
                 method: 'POST',
-                headers: {'Content-Type' : 'application/json'},
+                headers: {'Content-Type' : 'application/json', ...authHeaders() },
                 body: JSON.stringify({
                     player_id: data.id,
                     game_id: id,
@@ -254,7 +260,7 @@
             if (isCashedOut || myPendingCashout) return
             const response = await fetch('/api/transactions', {
                 method: 'POST',
-                headers: {'Content-type' : 'application/json'},
+                headers: {'Content-type' : 'application/json', ...authHeaders()},
                 body: JSON.stringify({
                     player_id: currentPlayer.id,
                     game_id: id,
@@ -273,7 +279,7 @@
             if (isCashedOut || myPendingCashout) { setView(previousView); return }
             const response = await fetch('/api/transactions', {
                 method: 'POST',
-                headers: {'Content-type' : 'application/json'},
+                headers: {'Content-type' : 'application/json', ...authHeaders()},
                 body: JSON.stringify({
                     player_id: currentPlayer.id,
                     game_id: id,
@@ -291,7 +297,7 @@
         async function handleApprove(transactionId) {
             const res = await fetch(`/api/transactions/${transactionId}`, {
                 method: 'PATCH',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', ...authHeaders()},
                 body: JSON.stringify({ status: 'approved' })
             })
 
@@ -316,7 +322,7 @@
         async function handleReject(transactionId) {
             await fetch(`/api/transactions/${transactionId}`, {
                 method: 'PATCH',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', ...authHeaders()},
                 body: JSON.stringify({ status: 'rejected' })
             })
             showToast('Request rejected')
@@ -325,7 +331,7 @@
         async function handleUpdateAmount(transactionId, amount) {
             const res = await fetch(`/api/transactions/${transactionId}`, {
                 method: 'PATCH',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', ...authHeaders()},
                 body: JSON.stringify({ amount })
             })
             if (!res.ok) {
