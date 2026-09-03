@@ -35,8 +35,8 @@ io.on('connection', (socket) => {
 })
 
 app.use(express.json())
-app.use('/api/games', gamesRouter)
-app.use('/api/players', playersRouter(io))
+app.use('/api/games', requireAuth, gamesRouter)
+app.use('/api/players', requireAuth, playersRouter(io))
 app.use('/api/transactions', requireAuth,  transactionsRouter(io))
 app.get('/api/auth/google', passport.authenticate('google', {scope: ['profile', 'email']}))
 app.get('/api/auth/google/callback', passport.authenticate('google', { session: false }), (req, res) => {

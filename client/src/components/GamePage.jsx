@@ -3,6 +3,8 @@
     import GameEntry from './GameEntry.jsx'
     import PlayerTransactionsModal from './PlayerTransactionsModal.jsx'
     import { io } from 'socket.io-client'
+    import { authHeaders } from "../utils/authHeaders.js"
+    
 
     // REST calls go through the Vercel rewrite / Vite proxy at `/api`, but a
     // websocket can't use that proxy — it needs an absolute origin. Prefer an
@@ -19,10 +21,7 @@
             name: '',
             buyIn: ''
         }
-    function authHeaders() {
-        const token = localStorage.getItem('token')
-        return { Authorization: `Bearer ${token}`}
-    }
+   
     function GamePage() {
         const { id } = useParams()
         const [game, setGame] = useState()
@@ -155,12 +154,16 @@
                 setView('host')
             }
 
-            fetch(`/api/games/${id}`)
+            fetch(`/api/games/${id}`, {
+                headers: authHeaders()
+            })
                 .then(res => res.json())
                 .then(data => { if (!cancelled) setGame(data) })
                 .catch(() => {})
 
-            fetch(`/api/players/${id}`)
+            fetch(`/api/players/${id}`, {
+                headers: authHeaders()
+            })
                 .then(res => (res.ok ? res.json() : Promise.reject(new Error('players fetch failed'))))
                 .then(data => {
                     if (cancelled || !Array.isArray(data)) return
@@ -205,7 +208,7 @@
 
             const response = await fetch('/api/players', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify({...playersForm, game_id: id})
 
             })
@@ -370,7 +373,9 @@
 
             const isSelf = currentPlayer && currentPlayer.id === player.id
 
-            const res = await fetch(`/api/players/${player.id}`, {method: 'DELETE'})
+            const res = await fetch(`/api/players/${player.id}`, {
+                method: 'DELETE',
+                headers: authHeaders()}, )
 
             if (!res.ok && res.status !== 404) {
                 showToast('Could not remove player')

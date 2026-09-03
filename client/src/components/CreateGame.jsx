@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { authHeaders } from '../utils/authHeaders'
 const DEFAULT_FORM = {
     date: new Date().toISOString().split('T')[0],
     location: '',
@@ -21,7 +22,7 @@ function CreateGame() {
 
         const response = await fetch('/api/games', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...authHeaders()},
             body: JSON.stringify(form)
         })
 

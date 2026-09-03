@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from 'react-router-dom'
+import { authHeaders } from "../utils/authHeaders"
 
 function GameList () {
     const [games, setGames] = useState([])
@@ -7,7 +8,9 @@ function GameList () {
     const navigate = useNavigate()
 
     useEffect(() => {
-        fetch('/api/games')
+        fetch('/api/games', {
+            headers: authHeaders()
+        })
         .then(res => res.json())
         .then(data => setGames(data))
         .finally(() => setLoading(false))
