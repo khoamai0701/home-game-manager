@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import GamePage from './components/GamePage'
 import GameList from './components/GameList'
 import Dashboard from './components/Dashboard'
+import AuthCallback from './components/AuthCallBack'
 
 function App() {
 
