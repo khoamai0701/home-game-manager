@@ -6,6 +6,8 @@ import transactionsRouter from './routes/transactions.js'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
+import passport from './auth.js'
+import jwt from 'jsonwebtoken'
 
 
 
@@ -35,6 +37,14 @@ app.use(express.json())
 app.use('/api/games', gamesRouter)
 app.use('/api/players', playersRouter(io))
 app.use('/api/transactions', transactionsRouter(io))
+app.get('/api/auth/google', passport.authenticate('google', {scope: ['profile', 'email']}))
+app.get('/api/auth/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
+    const token = jwt.sign({ userId: req.user.id}, process.env.JWT_SECRET, {expiresIn: '7d'})
+    res.redirect(`https://home-game-manager.vercel.app/auth/callback?token=${token}`)
+    
+}
+
+)
 
 // Fallback error handler so a thrown/rejected route handler returns JSON
 // instead of a bare 500 (or crashing the process on older Express).
