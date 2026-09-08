@@ -5,12 +5,14 @@ const router = express.Router()
 
 router.post('/', async (req, res) => {
     const { name } = req.body
-    const created_by_user_id = req.user.userId
+    const user_id = req.user.userId
     const created_at = new Date().toISOString()
 
-    const result = await pool.query('INSERT INTO groups (name, created_by_user_id, created_at) VALUES ($1, $2, $3) RETURNING *', [name, created_by_user_id, created_at])
+    const result = await pool.query('INSERT INTO groups (name, created_by_user_id, created_at) VALUES ($1, $2, $3) RETURNING *', [name, user_id, created_at])
+
 
     const newGroup = result.rows[0]
+    const userResult = await pool.query(`INSERT into group_members (group_id, user_id, joined_at) VALUES ($1, $2, $3) RETURNING *`, [newGroup.id, user_id, new Date().toISOString()])
     
     res.status(201).json(newGroup)
 })
