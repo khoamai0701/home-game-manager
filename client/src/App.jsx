@@ -5,6 +5,8 @@ import GameList from './components/GameList'
 import Dashboard from './components/Dashboard'
 import AuthCallback from './components/AuthCallback'
 import Login from './components/Login'
+import CreateGroup from './components/CreateGroups'
+
 function App() {
 
   return (
@@ -17,7 +19,7 @@ function App() {
       <Route path = "/games" element={<GameList />} />
       <Route path= "/home" element={<Dashboard />}/>
       <Route path ="/auth/callback" element={<AuthCallback />} />
-      
+      <Route path = '/create-group' element={<CreateGroup />} />
 
     </Routes>
     </BrowserRouter>
