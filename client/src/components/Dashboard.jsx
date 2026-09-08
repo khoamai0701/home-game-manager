@@ -10,6 +10,7 @@ function Dashboard() {
             <button onClick={() => navigate('/create')}>Create Game</button>
             <button onClick={() => navigate('/games')}>View Games</button>
             <button onClick={() => navigate('/create-group')}>Create Group</button>
+            <button onClick={(() => navigate('/groups'))}>View Groups</button>
         </div>
     )
 }
