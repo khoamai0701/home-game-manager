@@ -9,6 +9,7 @@ import cors from 'cors'
 import passport from './auth.js'
 import jwt from 'jsonwebtoken'
 import requireAuth from './middleware/requireAuth.js'
+import groupsRouter from './routes/groups.js'
 
 
 
@@ -38,6 +39,7 @@ app.use(express.json())
 app.use('/api/games', requireAuth, gamesRouter)
 app.use('/api/players', requireAuth, playersRouter(io))
 app.use('/api/transactions', requireAuth,  transactionsRouter(io))
+app.use('/api/groups', requireAuth, groupsRouter)
 app.get('/api/auth/google', passport.authenticate('google', {scope: ['profile', 'email']}))
 app.get('/api/auth/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
     const token = jwt.sign({ userId: req.user.id}, process.env.JWT_SECRET, {expiresIn: '7d'})
