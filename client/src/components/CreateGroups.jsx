@@ -15,7 +15,7 @@ function CreateGroup() {
             body: JSON.stringify({name: name})
         })
         const data = await response.json()
-        navigate(`/home`)
+        navigate(`/groups/${data.id}`)
     }
 
     return (
