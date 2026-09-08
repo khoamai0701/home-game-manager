@@ -44,4 +44,24 @@ router.post('/:id/members', async (req, res) => {
 
 })
 
+router.get('/:id', async (req, res) => {
+    const id  = req.params.id
+    const result = await pool.query(`
+        SELECT groups.*, users.display_name, users.email
+        FROM groups
+        JOIN group_members ON groups.id = group_members.group_id
+        JOIN users ON users.id = group_members.user_id
+        WHERE groups.id = $1`, [id])
+    
+    const members = result.rows.map(row => {
+        return {display_name: row.display_name, email: row.email}
+    })
+    const response = {
+        id: result.rows[0].id,
+        name: result.rows[0].name,
+        members: members
+    }
+    res.json(response)
+})
+
 export default router

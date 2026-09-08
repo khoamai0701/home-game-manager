@@ -7,6 +7,8 @@ import AuthCallback from './components/AuthCallback'
 import Login from './components/Login'
 import CreateGroups from './components/CreateGroups'
 import GroupsList from './components/GroupsList'
+import GroupDetails from './components/GroupDetails'
+
 
 function App() {
 
@@ -22,6 +24,7 @@ function App() {
       <Route path ="/auth/callback" element={<AuthCallback />} />
       <Route path = '/create-group' element={<CreateGroups />} />
       <Route path = '/groups' element={<GroupsList />} />
+      <Route path = '/groups/:id' element={<GroupDetails />} />
 
     </Routes>
     </BrowserRouter>
