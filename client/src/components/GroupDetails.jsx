@@ -12,14 +12,34 @@ function GroupDetails() {
     const { id } = useParams()
     const [group, setGroup] = useState(DEFAULT_GROUP)
     const navigate = useNavigate()
+    const [email, setEmail] = useState('')
 
     useEffect(() => {
+        fetchGroup()
+    }, [id])
+    async function handleSubmit(e) {
+        e.preventDefault()
+
+        const response = await fetch(`/api/groups/${id}/members`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', ...authHeaders()},
+            body: JSON.stringify({email: email})
+        })
+
+        const data = await response.json()
+        fetchGroup()
+        
+
+        
+    }
+
+    function fetchGroup() {
         fetch(`/api/groups/${id}`, {
             headers: authHeaders()
         })
         .then(res => res.json())
         .then(data => setGroup(data))
-    }, [id])
+    }
 
     return (
         <div className="app-shell">
@@ -32,6 +52,15 @@ function GroupDetails() {
             </div>
 
             <div className="page-content">
+                <form onSubmit={handleSubmit}>
+                    <input
+                        type="email"
+                        placeholder="Friend's email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                    />
+                    <button type="submit">Add Member</button>
+                </form>
                 <div>
                     <div className="section-title">
                         <h2>🪑 Members</h2>
