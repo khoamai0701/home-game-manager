@@ -26,8 +26,16 @@ function GroupDetails() {
             body: JSON.stringify({email: email})
         })
 
+        if (!response.ok) {
+            const errorData = await response.json()
+            alert(errorData.error)
+            return
+        }
         const data = await response.json()
+        setEmail('')
         fetchGroup()
+        
+        
         
 
         
