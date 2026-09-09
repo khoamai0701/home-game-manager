@@ -12,9 +12,15 @@ export default function(io) {
         res.json(players.rows)
     })
 
+    
+
     router.post('/', async (req, res) => {
-        const { game_id, name, cashOut } = req.body
-        const result = await pool.query(`INSERT INTO players (game_id, name) VALUES ($1, $2) RETURNING * `, [game_id, name])
+        const { game_id, cashOut } = req.body
+        const userId = req.user.userId
+        const userResult = await pool.query(`SELECT display_name FROM users WHERE id = $1`, [userId])
+        const name = userResult.rows[0].display_name
+
+        const result = await pool.query(`INSERT INTO players (game_id, name, user_id) VALUES ($1, $2, $3) RETURNING * `, [game_id, name, userId])
         const newPlayer = result.rows[0]
 
         io.to(String(game_id)).emit('player-added', newPlayer)

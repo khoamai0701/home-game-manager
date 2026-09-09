@@ -16,7 +16,8 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
     const { date, location, pin} = req.body
-    const result = await pool.query(`INSERT INTO games (date, location, pin) VALUES ($1, $2, $3) RETURNING *`, [date, location, pin])
+    const createdByUserId = req.user.userId
+    const result = await pool.query(`INSERT INTO games (date, location, pin, created_by_user_id) VALUES ($1, $2, $3, $4) RETURNING *`, [date, location, pin, createdByUserId])
     
     res.status(201).json(result.rows[0])
 

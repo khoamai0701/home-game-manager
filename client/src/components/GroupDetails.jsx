@@ -34,11 +34,6 @@ function GroupDetails() {
         const data = await response.json()
         setEmail('')
         fetchGroup()
-        
-        
-        
-
-        
     }
 
     function fetchGroup() {

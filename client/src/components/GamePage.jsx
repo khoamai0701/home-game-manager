@@ -1,10 +1,9 @@
     import { useParams } from "react-router-dom"
     import { useEffect, useRef, useState } from "react"
-    import GameEntry from './GameEntry.jsx'
     import PlayerTransactionsModal from './PlayerTransactionsModal.jsx'
     import { io } from 'socket.io-client'
-    import { authHeaders } from "../utils/authHeaders.js"
-    
+    import { authHeaders, getCurrentUserId } from "../utils/authHeaders.js"
+
 
     // REST calls go through the Vercel rewrite / Vite proxy at `/api`, but a
     // websocket can't use that proxy — it needs an absolute origin. Prefer an
@@ -18,18 +17,14 @@
             : 'http://localhost:3002')
 
     const DEFAULT_FORM = {
-            name: '',
             buyIn: ''
         }
-   
+
     function GamePage() {
         const { id } = useParams()
         const [game, setGame] = useState()
         const [players, setPlayers] = useState([])
-        const [view, setView] = useState('entry')
-        const [pin, setPin] = useState('')
-        const [error, setError] = useState(null)
-        const [currentPlayer, setCurrentPlayer] = useState(null)
+        const [view, setView] = useState('main')
         const [topOff, setTopOff] = useState('')
 
 
@@ -41,12 +36,20 @@
         const [toast, setToast] = useState(null)
         const [confirmDeletePlayer, setConfirmDeletePlayer] = useState(null)
         const [historyPlayer, setHistoryPlayer] = useState(null)
-        const [showClaimList, setShowClaimList] = useState(false)
+        const myUserId = getCurrentUserId()
 
-        // Socket listeners are attached once per game id; use a ref so those
-        // closures can see the *current* player without re-subscribing.
+        // Identity is now derived from the logged-in account rather than
+        // localStorage: whichever player row (if any) belongs to this user.
+        const currentPlayer = players.find(p => p.user_id === myUserId) || null
+        const isHost = game?.created_by_user_id === myUserId
+
+        // Socket listeners are attached once per game id; use refs so those
+        // closures can see the *current* player/host status without re-subscribing.
         const currentPlayerRef = useRef(null)
         useEffect(() => { currentPlayerRef.current = currentPlayer }, [currentPlayer])
+
+        const isHostRef = useRef(false)
+        useEffect(() => { isHostRef.current = isHost }, [isHost])
 
         const toastTimer = useRef(null)
         const lastToastRef = useRef({ message: null, at: 0 })
@@ -99,31 +102,23 @@
 
             socket.on('player-updated', (player) => {
                 setPlayers(prev => prev.map(p => p.id === player.id ? player : p))
-                if (currentPlayerRef.current && currentPlayerRef.current.id === player.id) {
-                    setCurrentPlayer(player)
-                    localStorage.setItem(`player_${id}`, JSON.stringify(player))
-                }
             })
 
             // Primary delivery for the cash-flow warning: same real-time channel
             // that already reliably delivers the approval itself. Only the host
             // acts on it. Deduped against the copy handleApprove may also show.
             socket.on('cashflow-warning', ({ warning }) => {
-                if (warning && localStorage.getItem(`host_${id}`)) showToast(warning)
+                if (warning && isHostRef.current) showToast(warning)
             })
 
             socket.on('player-deleted', ({ id: deletedId }) => {
+                const wasMe = currentPlayerRef.current && currentPlayerRef.current.id === deletedId
+
                 setPlayers(prev => prev.filter(p => p.id !== deletedId))
                 setTransactions(prev => prev.filter(t => t.player_id !== deletedId))
 
-                if (currentPlayerRef.current && currentPlayerRef.current.id === deletedId) {
-                    localStorage.removeItem(`player_${id}`)
-                    setCurrentPlayer(null)
-                    setHistoryPlayer(null)
-                    if (!localStorage.getItem(`host_${id}`)) {
-                        setView('entry')
-                        showToast('Your session was removed by the host')
-                    }
+                if (wasMe && !isHostRef.current) {
+                    showToast('Your session was removed by the host')
                 }
             })
 
@@ -134,25 +129,6 @@
 
         useEffect(() => {
             let cancelled = false
-
-            // Restore the saved session immediately from localStorage so a slow or
-            // failed players fetch can never drop a valid session (the old code only
-            // restored inside the fetch's .then, so any hiccup logged the player out).
-            const saved = localStorage.getItem(`player_${id}`)
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved)
-                    if (parsed && parsed.id != null) {
-                        setCurrentPlayer(parsed)
-                        setView('player')
-                    }
-                } catch {
-                    localStorage.removeItem(`player_${id}`)
-                }
-            }
-            if (localStorage.getItem(`host_${id}`)) {
-                setView('host')
-            }
 
             fetch(`/api/games/${id}`, {
                 headers: authHeaders()
@@ -168,25 +144,8 @@
                 .then(data => {
                     if (cancelled || !Array.isArray(data)) return
                     setPlayers(data)
-
-                    // Only reconcile against a *confirmed* list: if the saved player
-                    // genuinely no longer exists, clear the session; otherwise keep it.
-                    const savedRaw = localStorage.getItem(`player_${id}`)
-                    if (!savedRaw) return
-                    try {
-                        const parsed = JSON.parse(savedRaw)
-                        if (data.some(p => p.id === parsed.id)) {
-                            setCurrentPlayer(parsed)
-                        } else {
-                            localStorage.removeItem(`player_${id}`)
-                            setCurrentPlayer(null)
-                            if (!localStorage.getItem(`host_${id}`)) setView('entry')
-                        }
-                    } catch {
-                        localStorage.removeItem(`player_${id}`)
-                    }
                 })
-                .catch(() => { /* transient failure: keep the optimistic session */ })
+                .catch(() => {})
 
             fetch(`/api/transactions/${id}`, {
                 headers: authHeaders()
@@ -209,14 +168,15 @@
             const response = await fetch('/api/players', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({...playersForm, game_id: id})
+                body: JSON.stringify({ game_id: id, user_id: myUserId })
 
             })
 
 
             const data = await response.json()
-            setCurrentPlayer(data)
-            localStorage.setItem(`player_${id}`, JSON.stringify(data))
+            // Optimistic local update — the 'player-added' socket event will also
+            // deliver this, but the dedupe check makes that a no-op.
+            setPlayers(prev => prev.some(p => p.id === data.id) ? prev : [...prev, data])
 
 
 
@@ -236,27 +196,6 @@
 
             setPlayersForm(DEFAULT_FORM)
 
-        }
-
-        function handlePinSubmit() {
-            if (game.pin === pin) {
-                setView('host')
-                localStorage.setItem(`host_${id}`, true)
-            }
-            else {
-                setError('Incorrect PIN try again')
-            }
-
-        }
-
-        function claimPlayer(player) {
-            // Reconnect to an existing player record (lost localStorage / new
-            // device). Same persistence path as handleSubmit after a new signup.
-            setCurrentPlayer(player)
-            localStorage.setItem(`player_${id}`, JSON.stringify(player))
-            setShowClaimList(false)
-            setView('player')
-            showToast(`Welcome back, ${player.name}`)
         }
 
         async function handleTopOff() {
@@ -388,9 +327,6 @@
             if (historyPlayer && historyPlayer.id === player.id) setHistoryPlayer(null)
 
             if (isSelf) {
-                localStorage.removeItem(`player_${id}`)
-                setCurrentPlayer(null)
-                setView(localStorage.getItem(`host_${id}`) ? 'host' : 'entry')
                 showToast('You left the game')
             } else {
                 showToast(`Removed ${player.name}`)
@@ -404,37 +340,6 @@
 
         const toastEl = toast && <div className="toast">{toast}</div>
 
-        if (view === 'entry') {
-            return (
-                <>
-                    {toastEl}
-                    <GameEntry onSelectHost={() => setView('pin')} onSelectPlayer={() => setView('player')}/>
-                </>
-            )
-        }
-
-        if (view === 'pin') return (
-            <div className="screen-center">
-                {toastEl}
-                <div className="pin-card">
-                    <div className="brand-mark" style={{ marginBottom: 0 }}>🔒</div>
-                    <h2>Enter Host PIN</h2>
-                    <p className="pin-card__sub">Only the host has this code</p>
-                    <input
-                        className="pin-input"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="••••"
-                        name="pin"
-                        value={pin}
-                        onChange={e => setPin(e.target.value)}
-                    />
-                    {error && <p className="pin-error">{error}</p>}
-                    <button className="btn btn-primary btn-block" onClick={handlePinSubmit}>Unlock Host View</button>
-                </div>
-            </div>
-        )
-
         if (view === 'cashOut' && (isCashedOut || myPendingCashout)) return (
             <div className="screen-center">
                 {toastEl}
@@ -445,7 +350,7 @@
                             ? 'Your cash-out has already been approved.'
                             : 'You already have a cash-out waiting for host approval.'}
                     </p>
-                    <button className="btn btn-secondary btn-block" onClick={() => setView(previousView || 'player')}>Back</button>
+                    <button className="btn btn-secondary btn-block" onClick={() => setView(previousView || 'main')}>Back</button>
                 </div>
             </div>
         )
@@ -498,7 +403,7 @@
                     <span className="game-header__location">{game.location}</span>
                     <span className="game-header__date">{game.date}</span>
                 </div>
-                {view === 'host' && (
+                {isHost && (
                     <div className="game-header__actions">
                         <button className="icon-btn icon-btn--neutral" onClick={handleShare} aria-label="Share game link">
                             {linkCopied ? '✓' : '🔗'}
@@ -506,11 +411,11 @@
                         <span className="role-badge role-badge--host">👑 Host</span>
                     </div>
                 )}
-                {view === 'player' && currentPlayer && <span className="role-badge role-badge--player">🂡 {currentPlayer.name}</span>}
+                {!isHost && currentPlayer && <span className="role-badge role-badge--player">🂡 {currentPlayer.name}</span>}
             </div>
 
             <div className="page-content">
-                {view === 'host' && (
+                {isHost && (
                     <div className="summary-bar">
                         <div className="summary-stat">
                             <span className="summary-stat__label">Buy-ins</span>
@@ -563,36 +468,11 @@
                         <form className="form-card" onSubmit={handleSubmit}>
                             <h2>Add a Player</h2>
                             <div className="form-group">
-                                <label className="form-label" htmlFor="name">Name</label>
-                                <input className="form-input" id="name" type="text" name="name" placeholder="Player name" value={playersForm.name} onChange={handleChange}></input>
-                            </div>
-                            <div className="form-group">
                                 <label className="form-label" htmlFor="buyIn">Buy-in</label>
                                 <input className="form-input" id="buyIn" type="number" name="buyIn" placeholder="0" value={playersForm.buyIn} onChange={handleChange}></input>
                             </div>
                             <button className="btn btn-primary btn-block" type="submit">Add Player</button>
                         </form>
-
-                        {players.length > 0 && (
-                            <div className="claim-block">
-                                <button className="link-btn" onClick={() => setShowClaimList(v => !v)}>
-                                    {showClaimList ? 'Never mind' : 'Already joined? Tap your name'}
-                                </button>
-
-                                {showClaimList && (
-                                    <div className="claim-list">
-                                        {players.map(p => (
-                                            <button key={p.id} className="claim-item" onClick={() => claimPlayer(p)}>
-                                                <span className="claim-item__avatar">{p.name?.[0]?.toUpperCase() || '?'}</span>
-                                                <span className="claim-item__name">{p.name}</span>
-                                                {p.cashed_out && <span className="claim-item__tag">cashed out</span>}
-                                                <span className="claim-item__chevron">›</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -630,7 +510,7 @@
                                                     {profit > 0 ? '+' : ''}{formatMoney(profit)}
                                                 </span>
                                             )}
-                                            {view === 'host' && (
+                                            {isHost && (
                                                 <>
                                                     <button className="icon-btn icon-btn--neutral" onClick={() => setHistoryPlayer(p)} aria-label={`Edit ${p.name}'s transactions`}>✎</button>
                                                     <button className="icon-btn" onClick={() => setConfirmDeletePlayer(p)} aria-label={`Remove ${p.name}`}>✕</button>
@@ -645,7 +525,7 @@
                     )}
                 </div>
 
-                {view === 'host' && (
+                {isHost && (
                     <div className="pending-section">
                         <div className="section-title">
                             <h2>⏳ Pending Approvals</h2>
