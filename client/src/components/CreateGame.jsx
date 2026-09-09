@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { authHeaders } from '../utils/authHeaders'
 const DEFAULT_FORM = {
     date: new Date().toISOString().split('T')[0],
-    location: '',
-    pin: ''
-
-
+    location: ''
 }
 function CreateGame() {
     const [form, setForm] = useState(DEFAULT_FORM)
@@ -48,11 +45,6 @@ function CreateGame() {
                 <div className="form-group">
                     <label className="form-label" htmlFor="location">Location</label>
                     <input className="form-input" id="location" type='text' name='location' placeholder="e.g. Mike's Place" value={form.location} onChange={handleChange}/>
-                </div>
-
-                <div className="form-group">
-                    <label className="form-label" htmlFor="pin">Host PIN</label>
-                    <input className="form-input" id="pin" type='text' name='pin' placeholder="4-digit PIN" value={form.pin} onChange={handleChange}/>
                 </div>
 
                 <button className="btn btn-primary btn-block" type='submit'>Create Game</button>
