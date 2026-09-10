@@ -163,7 +163,6 @@
                 .then(res => res.json())
                 .then(data => { if (!cancelled && Array.isArray(data)) setTransactions(data) })
                 .catch(() => {})
-
             return () => { cancelled = true }
         }, [id])
 
