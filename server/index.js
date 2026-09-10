@@ -40,10 +40,16 @@ app.use('/api/games', requireAuth, gamesRouter)
 app.use('/api/players', requireAuth, playersRouter(io))
 app.use('/api/transactions', requireAuth,  transactionsRouter(io))
 app.use('/api/groups', requireAuth, groupsRouter)
-app.get('/api/auth/google', passport.authenticate('google', {scope: ['profile', 'email']}))
+
+app.get('/api/auth/google', (req, res, next) => {
+    const state =  req.query.redirect || '/home'
+    passport.authenticate('google', {scope: ['profile', 'email'], state})(req, res, next)
+})
+
 app.get('/api/auth/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
     const token = jwt.sign({ userId: req.user.id}, process.env.JWT_SECRET, {expiresIn: '7d'})
-    res.redirect(`https://home-game-manager.vercel.app/auth/callback?token=${token}`)
+    const redirectPath = req.query.state || '/home'
+    res.redirect(`https://home-game-manager.vercel.app/auth/callback?token=${token}&state=${redirectPath}`)
     
 }
 

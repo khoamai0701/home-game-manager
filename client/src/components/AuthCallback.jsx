@@ -5,11 +5,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 function AuthCallback() {
     const [searchParams] = useSearchParams()
     const token = searchParams.get('token')
+    const state = searchParams.get('state')
     const navigate = useNavigate()
     useEffect(() => {
         
         localStorage.setItem('token', token)
-        navigate('/home')
+        navigate(state)
 
     }, [])
 

@@ -36,6 +36,7 @@
         const [toast, setToast] = useState(null)
         const [confirmDeletePlayer, setConfirmDeletePlayer] = useState(null)
         const [historyPlayer, setHistoryPlayer] = useState(null)
+        const [needsLogin, setNeedsLogin] = useState(false)
         const myUserId = getCurrentUserId()
 
         // Identity is now derived from the logged-in account rather than
@@ -133,7 +134,12 @@
             fetch(`/api/games/${id}`, {
                 headers: authHeaders()
             })
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) {
+                        setNeedsLogin(true)
+                    }
+                    return res.ok ? res.json() : Promise.reject(new Error('games fetch failed'))
+                })
                 .then(data => { if (!cancelled) setGame(data) })
                 .catch(() => {})
 
@@ -334,6 +340,17 @@
         }
 
         if (!game) return <div className="loading-screen"><span className="spinner"></span>Loading table…</div>
+
+        if (needsLogin) {
+            return (
+                <div>
+                    <h1>Please log in to view this game</h1>
+                    <a href={`https://home-game-manager-production.up.railway.app/api/auth/google?redirect=/game/${id}` }>
+                        <button>Sign in with Google</button>
+                    </a>
+                </div>
+            )
+        }
 
 
 
