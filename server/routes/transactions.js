@@ -86,6 +86,14 @@ router.patch('/:id', async (req, res) => {
                 'UPDATE players SET cashed_out = $1 WHERE id = $2 RETURNING *',
                 [nowApproved, updatedTransaction.player_id]
             )
+            const cashedOutResult = await pool.query(`SELECT COUNT(*) FROM players WHERE game_id = $1 AND cashed_out = false`, [updatedTransaction.game_id])
+
+            if (cashedOutResult.rows[0].count === '0') {
+                const updateActive = await pool.query(`UPDATE games SET is_active = false WHERE id = $1 RETURNING *`, [updatedTransaction.game_id])
+                io.to(room).emit('game-updated', updateActive.rows[0])
+
+            }
+            
             if (playerResult.rowCount > 0) {
                 io.to(room).emit('player-updated', playerResult.rows[0])
             }

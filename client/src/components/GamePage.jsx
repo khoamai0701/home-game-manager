@@ -105,6 +105,9 @@
                 setPlayers(prev => prev.map(p => p.id === player.id ? player : p))
             })
 
+            3 setGame(game)
+            })
+
             // Primary delivery for the cash-flow warning: same real-time channel
             // that already reliably delivers the approval itself. Only the host
             // acts on it. Deduped against the copy handleApprove may also show.
