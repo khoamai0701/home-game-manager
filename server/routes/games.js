@@ -29,4 +29,11 @@ router.delete('/:id', async (req, res) => {
     res.status(204).send()
 })
 
+router.patch('/:id', async (req, res) => {
+    const { id } = req.params
+    const result = await pool.query(`UPDATE games SET is_active = $1 WHERE id = $2 RETURNING *`, [false, id])
+    res.json(result.rows[0])
+
+})
+
 export default router

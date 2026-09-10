@@ -21,6 +21,7 @@ await pool.query(`
 
 // Set once a player's cash-out transaction is approved; locks their actions.
 await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS cashed_out BOOLEAN DEFAULT false`)
+await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;`)
 
 await pool.query(`
   CREATE TABLE IF NOT EXISTS transactions (

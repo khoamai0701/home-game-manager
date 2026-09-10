@@ -338,6 +338,16 @@
                 showToast(`Removed ${player.name}`)
             }
         }
+
+        async function handleEndGame() {
+            const res = await fetch(`/api/games/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json', ...authHeaders()}
+            })
+            const updated = await res.json()
+            setGame(updated)
+
+        }
         if (needsLogin) {
             return (
                 <div>
@@ -421,11 +431,15 @@
                     <span className="game-header__location">{game.location}</span>
                     <span className="game-header__date">{game.date}</span>
                 </div>
+                {game.is_active === false && (
+                    <span className="status-pill status-pill--rejected">Game Ended</span>
+                )}
                 {isHost && (
                     <div className="game-header__actions">
                         <button className="icon-btn icon-btn--neutral" onClick={handleShare} aria-label="Share game link">
                             {linkCopied ? '✓' : '🔗'}
                         </button>
+                        <button className="btn btn-outline-danger" onClick={handleEndGame}>End Game</button>
                         <span className="role-badge role-badge--host">👑 Host</span>
                     </div>
                 )}
