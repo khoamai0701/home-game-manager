@@ -14,6 +14,12 @@ router.get('/:id', async (req, res) => {
     res.json(selectedGame.rows[0])
 })
 
+router.get('/group/:group_id', async (req, res) => {
+    const { group_id } = req.params
+    const games = await pool.query(`SELECT * FROM games WHERE group_id = $1 ORDER BY date DESC` , [group_id])
+    res.json(games.rows)
+})
+
 router.post('/', async (req, res) => {
     const { date, location } = req.body
     const createdByUserId = req.user.userId
