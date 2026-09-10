@@ -22,8 +22,9 @@ router.get('/group/:group_id', async (req, res) => {
 
 router.post('/', async (req, res) => {
     const { date, location, group_id } = req.body
+    const safeGroupId = group_id === '' ? null : group_id
     const createdByUserId = req.user.userId
-    const result = await pool.query(`INSERT INTO games (date, location, created_by_user_id, group_id) VALUES ($1, $2, $3, $4) RETURNING *`, [date, location, createdByUserId, group_id])
+    const result = await pool.query(`INSERT INTO games (date, location, created_by_user_id, group_id) VALUES ($1, $2, $3, $4) RETURNING *`, [date, location, createdByUserId, safeGroupId])
     
     res.status(201).json(result.rows[0])
 
