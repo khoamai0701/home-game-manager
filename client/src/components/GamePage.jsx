@@ -338,9 +338,6 @@
                 showToast(`Removed ${player.name}`)
             }
         }
-
-        if (!game) return <div className="loading-screen"><span className="spinner"></span>Loading table…</div>
-
         if (needsLogin) {
             return (
                 <div>
@@ -351,6 +348,10 @@
                 </div>
             )
         }
+
+        if (!game) return <div className="loading-screen"><span className="spinner"></span>Loading table…</div>
+
+        
 
 
 
