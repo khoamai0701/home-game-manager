@@ -5,6 +5,9 @@ export function authHeaders() {
 
 export function getCurrentUserId() {
   const token = localStorage.getItem('token')
+  if (!token) {
+    return
+  }
   const payload = token.split('.')[1]
   const decoded = atob(payload)
   const user = JSON.parse(decoded)
