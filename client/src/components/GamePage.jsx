@@ -105,7 +105,8 @@
                 setPlayers(prev => prev.map(p => p.id === player.id ? player : p))
             })
 
-            3 setGame(game)
+            socket.on('game-updated', (game) => {
+                setGame(game)
             })
 
             // Primary delivery for the cash-flow warning: same real-time channel
