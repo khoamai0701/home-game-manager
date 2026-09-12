@@ -21,18 +21,19 @@ router.get('/', async (req, res) => {
 router.get('/:group_id', async (req, res) => {
     const groupId = req.params.group_id
     const groupStats = await pool.query(`
-        SELECT 
-            users.display_name, 
-            SUM(amount) FILTER (WHERE type != 'cashout' AND status = 'approved') AS total_buy_in,
-            SUM(amount) FILTER (WHERE type = 'cashout' AND status = 'approved') AS total_cash_out
-        FROM transactions
-        JOIN players ON transactions.player_id = players.id
-        JOIN group_members ON players.user_id = group_members.user_id 
-        JOIN users ON group_members.user_id = users.id
+        SELECT
+            users.id AS user_id,
+            users.display_name,
+            COALESCE(SUM(transactions.amount) FILTER (WHERE transactions.type != 'cashout' AND transactions.status = 'approved'), 0) AS total_buy_in,
+            COALESCE(SUM(transactions.amount) FILTER (WHERE transactions.type = 'cashout' AND transactions.status = 'approved'), 0) AS total_cash_out
+        FROM group_members
+        JOIN users ON users.id = group_members.user_id
+        LEFT JOIN players ON players.user_id = group_members.user_id
+        LEFT JOIN transactions ON transactions.player_id = players.id
         WHERE group_members.group_id = $1
-        GROUP BY users.display_name`, [groupId])
+        GROUP BY users.id, users.display_name`, [groupId])
     res.json(groupStats.rows)
-        
+
 
 })
 

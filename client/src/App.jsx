@@ -8,6 +8,7 @@ import Login from './components/Login'
 import CreateGroups from './components/CreateGroups'
 import GroupsList from './components/GroupsList'
 import GroupDetails from './components/GroupDetails'
+import Stats from './components/Stats'
 
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
       <Route path = '/create-group' element={<CreateGroups />} />
       <Route path = '/groups' element={<GroupsList />} />
       <Route path = '/groups/:id' element={<GroupDetails />} />
+      <Route path = '/stats' element={<Stats />} />
 
     </Routes>
     </BrowserRouter>

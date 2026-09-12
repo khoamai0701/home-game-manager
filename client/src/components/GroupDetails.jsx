@@ -13,6 +13,7 @@ function GroupDetails() {
 
     const [group, setGroup] = useState(DEFAULT_GROUP)
     const [games, setGames] = useState([])
+    const [standings, setStandings] = useState([])
     const navigate = useNavigate()
     const [email, setEmail] = useState('')
 
@@ -23,6 +24,12 @@ function GroupDetails() {
         })
         .then(res => res.json())
         .then(data => setGames(data) )
+
+        fetch(`/api/stats/${id}`, {
+            headers: authHeaders()
+        })
+        .then(res => res.json())
+        .then(data => setStandings(data))
     }, [id])
     async function handleSubmit(e) {
         e.preventDefault()
@@ -53,6 +60,10 @@ function GroupDetails() {
 
     const activeGames = games.filter(g => g.is_active)
     const pastGames = games.filter(g => !g.is_active)
+    const formatMoney = n => `$${Number(n).toLocaleString()}`
+    const rankedStandings = [...standings].sort((a, b) =>
+        (Number(b.total_cash_out) - Number(b.total_buy_in)) - (Number(a.total_cash_out) - Number(a.total_buy_in))
+    )
 
     return (
         <div className="app-shell">
@@ -139,6 +150,36 @@ function GroupDetails() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <div className="section-title">
+                        <h2>🏆 Standings</h2>
+                        <span className="section-count">{rankedStandings.length}</span>
+                    </div>
+                    {rankedStandings.length === 0 ? (
+                        <div className="empty-state">No stats yet</div>
+                    ) : (
+                        <div className="player-list">
+                            {rankedStandings.map(s => {
+                                const profit = Number(s.total_cash_out) - Number(s.total_buy_in)
+                                return (
+                                    <div key={s.user_id} className="player-card">
+                                        <div className="player-card__avatar">{s.display_name?.[0]?.toUpperCase() || '?'}</div>
+                                        <div className="player-card__info">
+                                            <span className="player-card__name">{s.display_name}</span>
+                                            <span className="player-card__buyin">Buy-in {formatMoney(s.total_buy_in)} · Cash-out {formatMoney(s.total_cash_out)}</span>
+                                        </div>
+                                        <div className="player-card__right">
+                                            <span className={`profit-pill ${profit > 0 ? 'profit-pill--positive' : profit < 0 ? 'profit-pill--negative' : 'profit-pill--neutral'}`}>
+                                                {profit > 0 ? '+' : ''}{formatMoney(profit)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )
+                            })}
                         </div>
                     )}
                 </div>

@@ -46,6 +46,15 @@ function Dashboard() {
                     </span>
                     <span className="entry-option__chevron">›</span>
                 </button>
+
+                <button className="entry-option" onClick={() => navigate('/stats')}>
+                    <span className="entry-option__icon">📊</span>
+                    <span className="entry-option__text">
+                        <span className="entry-option__title">Stats</span>
+                        <span className="entry-option__desc">See your buy-ins, cash-outs &amp; profit</span>
+                    </span>
+                    <span className="entry-option__chevron">›</span>
+                </button>
             </div>
         </div>
     )
