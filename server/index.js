@@ -10,6 +10,7 @@ import passport from './auth.js'
 import jwt from 'jsonwebtoken'
 import requireAuth from './middleware/requireAuth.js'
 import groupsRouter from './routes/groups.js'
+import statsRouter from './routes/stats.js'
 
 
 
@@ -40,6 +41,7 @@ app.use('/api/games', requireAuth, gamesRouter)
 app.use('/api/players', requireAuth, playersRouter(io))
 app.use('/api/transactions', requireAuth,  transactionsRouter(io))
 app.use('/api/groups', requireAuth, groupsRouter)
+app.use('/api/stats', requireAuth, statsRouter)
 
 app.get('/api/auth/google', (req, res, next) => {
     const state =  req.query.redirect || '/home'
