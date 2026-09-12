@@ -51,6 +51,9 @@ function GroupDetails() {
         .then(data => setGroup(data))
     }
 
+    const activeGames = games.filter(g => g.is_active)
+    const pastGames = games.filter(g => !g.is_active)
+
     return (
         <div className="app-shell">
             <div className="game-header">
@@ -95,21 +98,49 @@ function GroupDetails() {
                 </div>
                 <div>
                     <div className="section-title">
-                        <h2>Games</h2>
-                        
+                        <h2>🟢 Active Sessions</h2>
+                        <span className="section-count">{activeGames.length}</span>
                     </div>
-                    {games.length === 0 ? (
-                            <div className="empty-state">No Games yet</div>
-                        ) : (
-                            <div className="game-list">
-                                {games.map(g => (
-                                    <div key={g.id} onClick={() => navigate(`/game/${g.id}`)}>
-                                        {g.date} {g.location}
-                                        {g.is_active ? 'active' : 'Done'}
+                    {activeGames.length === 0 ? (
+                        <div className="empty-state">No active sessions</div>
+                    ) : (
+                        <div className="player-list">
+                            {activeGames.map(g => (
+                                <div key={g.id} className="player-card" onClick={() => navigate(`/game/${g.id}`)}>
+                                    <div className="player-card__avatar">♠</div>
+                                    <div className="player-card__info">
+                                        <span className="player-card__name">{g.location}</span>
+                                        <span className="player-card__buyin">{g.date}</span>
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <div className="section-title">
+                        <h2>🕘 Past Games</h2>
+                        <span className="section-count">{pastGames.length}</span>
+                    </div>
+                    {pastGames.length === 0 ? (
+                        <div className="empty-state">No past games</div>
+                    ) : (
+                        <div className="player-list">
+                            {pastGames.map(g => (
+                                <div key={g.id} className="player-card" onClick={() => navigate(`/game/${g.id}`)}>
+                                    <div className="player-card__avatar">♠</div>
+                                    <div className="player-card__info">
+                                        <span className="player-card__name">{g.location}</span>
+                                        <span className="player-card__buyin">{g.date}</span>
+                                    </div>
+                                    <div className="player-card__right">
+                                        <span className="status-pill status-pill--rejected">Ended</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
