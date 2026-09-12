@@ -10,12 +10,19 @@ const DEFAULT_GROUP = {
 
 function GroupDetails() {
     const { id } = useParams()
+
     const [group, setGroup] = useState(DEFAULT_GROUP)
+    const [games, setGames] = useState([])
     const navigate = useNavigate()
     const [email, setEmail] = useState('')
 
     useEffect(() => {
         fetchGroup()
+        fetch(`/api/games/group/${id}`, {
+            headers: authHeaders()
+        })
+        .then(res => res.json())
+        .then(data => setGames(data) )
     }, [id])
     async function handleSubmit(e) {
         e.preventDefault()
@@ -85,6 +92,24 @@ function GroupDetails() {
                             ))}
                         </div>
                     )}
+                </div>
+                <div>
+                    <div className="section-title">
+                        <h2>Games</h2>
+                        
+                    </div>
+                    {games.length === 0 ? (
+                            <div className="empty-state">No Games yet</div>
+                        ) : (
+                            <div className="game-list">
+                                {games.map(g => (
+                                    <div key={g.id} onClick={() => navigate(`/game/${g.id}`)}>
+                                        {g.date} {g.location}
+                                        {g.is_active ? 'active' : 'Done'}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                 </div>
             </div>
         </div>
