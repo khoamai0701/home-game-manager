@@ -24,12 +24,17 @@ router.get('/:group_id', async (req, res) => {
         SELECT
             users.id AS user_id,
             users.display_name,
-            COALESCE(SUM(transactions.amount) FILTER (WHERE transactions.type != 'cashout' AND transactions.status = 'approved'), 0) AS total_buy_in,
-            COALESCE(SUM(transactions.amount) FILTER (WHERE transactions.type = 'cashout' AND transactions.status = 'approved'), 0) AS total_cash_out
+            COALESCE(SUM(transactions.amount) FILTER (
+                WHERE transactions.type != 'cashout' AND transactions.status = 'approved' AND games.group_id = $1
+            ), 0) AS total_buy_in,
+            COALESCE(SUM(transactions.amount) FILTER (
+                WHERE transactions.type = 'cashout' AND transactions.status = 'approved' AND games.group_id = $1
+            ), 0) AS total_cash_out
         FROM group_members
         JOIN users ON users.id = group_members.user_id
         LEFT JOIN players ON players.user_id = group_members.user_id
         LEFT JOIN transactions ON transactions.player_id = players.id
+        LEFT JOIN games ON games.id = transactions.game_id
         WHERE group_members.group_id = $1
         GROUP BY users.id, users.display_name`, [groupId])
     res.json(groupStats.rows)
