@@ -1,5 +1,5 @@
 import CreateGame from './components/CreateGame'
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import GamePage from './components/GamePage'
 import GameList from './components/GameList'
 import Dashboard from './components/Dashboard'
@@ -9,6 +9,7 @@ import CreateGroups from './components/CreateGroups'
 import GroupsList from './components/GroupsList'
 import GroupDetails from './components/GroupDetails'
 import Stats from './components/Stats'
+import AppLayout from './components/AppLayout'
 
 
 function App() {
@@ -16,22 +17,27 @@ function App() {
   return (
     <BrowserRouter>
     <Routes>
-      
+
+      {/* Bare routes: no app chrome. */}
       <Route path='/' element={<Login/>} />
-      <Route path='/create' element={<CreateGame />} />
-      <Route path="/game/:id" element={<GamePage />} />
-      <Route path = "/games" element={<GameList />} />
-      <Route path= "/home" element={<Dashboard />}/>
       <Route path ="/auth/callback" element={<AuthCallback />} />
-      <Route path = '/create-group' element={<CreateGroups />} />
-      <Route path = '/groups' element={<GroupsList />} />
-      <Route path = '/groups/:id' element={<GroupDetails />} />
-      <Route path = '/stats' element={<Stats />} />
+
+      {/* Everything else shares the nav / tab bar. */}
+      <Route element={<AppLayout />}>
+        <Route path='/create' element={<CreateGame />} />
+        <Route path="/game/:id" element={<GamePage />} />
+        <Route path = "/games" element={<GameList />} />
+        <Route path= "/home" element={<Dashboard />}/>
+        <Route path = '/create-group' element={<CreateGroups />} />
+        <Route path = '/groups' element={<GroupsList />} />
+        <Route path = '/groups/:id' element={<GroupDetails />} />
+        <Route path = '/stats' element={<Stats />} />
+      </Route>
 
     </Routes>
     </BrowserRouter>
-    
-    
+
+
   )
 }
 

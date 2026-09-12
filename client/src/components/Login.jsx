@@ -1,10 +1,43 @@
+import { LogoMark } from './Logo'
+import { IconChips, IconGroups, IconStats } from './Icons'
+
+const API_ORIGIN = 'https://home-game-manager-production.up.railway.app'
+
 function Login() {
   return (
-    <div className="app-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '1rem' }}>
-      <h1>Home Game Manager</h1>
-      <a href="https://home-game-manager-production.up.railway.app/api/auth/google">
-        <button>Sign in with Google</button>
-      </a>
+    <div className="login">
+      <div className="login__inner">
+        <div className="brand brand--xl">
+          <LogoMark size={46} />
+          <span className="brand__word">Rebuy</span>
+        </div>
+
+        <p className="login__tagline">
+          Track buy-ins, top-offs and cash-outs for your poker home game — and settle up
+          without the argument.
+        </p>
+
+        <a className="btn btn--primary btn--lg btn--block" href={`${API_ORIGIN}/api/auth/google`}>
+          Sign in with Google
+        </a>
+
+        <div className="login__points">
+          <div className="login__point">
+            <span className="login__point-icon"><IconChips size={16} /></span>
+            Run the table live — players request, the host approves.
+          </div>
+          <div className="login__point">
+            <span className="login__point-icon"><IconGroups size={16} /></span>
+            Keep a group of regulars and share every game with them.
+          </div>
+          <div className="login__point">
+            <span className="login__point-icon"><IconStats size={16} /></span>
+            See who's actually up over the whole season.
+          </div>
+        </div>
+
+        <p className="login__foot">Free for your home game. No chips required.</p>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authHeaders } from '../utils/authHeaders'
+import { IconChevronLeft } from './Icons'
+
 const DEFAULT_FORM = {
     date: new Date().toISOString().split('T')[0],
     location: '',
@@ -40,41 +42,58 @@ function CreateGame() {
 
     }
 
+    // The API hands back an error object rather than an array on 401 / outage;
+    // render against a safe list so the picker just shows "No group" instead of
+    // blanking the page.
+    const groupList = Array.isArray(groups) ? groups : []
+
     return (
-        <div className="screen-center">
-            <div className="brand-mark">♠</div>
-            <h1 className="entry-title">New Game</h1>
-            <p className="entry-subtitle">Set up a table and share the link with players</p>
+        <main className="page page--narrow">
+            <header className="page__head">
+                <button className="page__back" onClick={() => navigate('/home')}>
+                    <IconChevronLeft size={16} />
+                    Home
+                </button>
+                <div className="page__titles">
+                    <h1 className="page__title">New session</h1>
+                    <p className="page__sub">
+                        You'll be the host — you approve every top-off and cash-out at the table.
+                    </p>
+                </div>
+            </header>
 
-            <form className="form-card" style={{width: '100%'}} onSubmit={handleSubmit}>
-                <div className="form-group">
-                    <label className="form-label" htmlFor="date">Date</label>
-                    <input className="form-input" id="date" type='date' name='date' value={form.date} onChange={handleChange}/>
+            <form className="card form" onSubmit={handleSubmit}>
+                <div className="field">
+                    <label className="label" htmlFor="date">Date</label>
+                    <input className="input" id="date" type='date' name='date' value={form.date} onChange={handleChange}/>
                 </div>
 
-                <div className="form-group">
-                    <label className="form-label" htmlFor="location">Location</label>
-                    <input className="form-input" id="location" type='text' name='location' placeholder="e.g. Mike's Place" value={form.location} onChange={handleChange}/>
-                    
+                <div className="field">
+                    <label className="label" htmlFor="location">Location</label>
+                    <input className="input" id="location" type='text' name='location' placeholder="e.g. Mike's Place" value={form.location} onChange={handleChange}/>
                 </div>
-                
-                <div className="form-group">
-                    <label className="form-label" htmlFor="group_id">Group (optional)</label>
-                    <select className="form-input" id="group_id" name="group_id" value={form.group_id} onChange={handleChange}>
+
+                <div className="field">
+                    <label className="label" htmlFor="group_id">Group (optional)</label>
+                    <select className="input" id="group_id" name="group_id" value={form.group_id} onChange={handleChange}>
                         <option value="">No group</option>
-                        {groups.map(g => (
+                        {groupList.map(g => (
                             <option key={g.id} value={g.id}>{g.name}</option>
                         ))}
                     </select>
+                    <p className="field__hint">
+                        Attaching a group keeps this session in that group's history and counts it
+                        toward their standings. Leave it off for a one-time game.
+                    </p>
                 </div>
 
-
-                <button className="btn btn-primary btn-block" type='submit'>Create Game</button>
+                <button className="btn btn--primary btn--lg btn--block" type='submit'>Create session</button>
             </form>
-            <button className="btn btn-secondary btn-block history-btn" onClick={() => navigate('/games')}>
-                <span>🕘</span> Game History
+
+            <button className="btn btn--ghost btn--block" onClick={() => navigate('/games')}>
+                View past games
             </button>
-        </div>
+        </main>
     )
 
 }

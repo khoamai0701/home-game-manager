@@ -1,6 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
-import { authHeaders } from "../utils/authHeaders"
+import { authHeaders, getCurrentUserId } from "../utils/authHeaders"
+import { formatMoney, formatSigned, formatGameDate, plural } from "../utils/format"
+import {
+    IconChevronLeft, IconChevronRight, IconSpade, IconUser,
+    IconTrophy, IconGames, IconMail, IconClock,
+} from './Icons'
 
 const DEFAULT_GROUP = {
     id: '',
@@ -16,6 +21,7 @@ function GroupDetails() {
     const [standings, setStandings] = useState([])
     const navigate = useNavigate()
     const [email, setEmail] = useState('')
+    const myUserId = getCurrentUserId()
 
     useEffect(() => {
         fetchGroup()
@@ -58,133 +64,196 @@ function GroupDetails() {
         .then(data => setGroup(data))
     }
 
-    const activeGames = games.filter(g => g.is_active)
-    const pastGames = games.filter(g => !g.is_active)
-    const formatMoney = n => `$${Number(n).toLocaleString()}`
-    const rankedStandings = [...standings].sort((a, b) =>
+    // These endpoints hand back an error object rather than an array on 401 /
+    // outage; render against safe lists so that degrades to empty states rather
+    // than a blank screen.
+    const gameList = Array.isArray(games) ? games : []
+    const memberList = Array.isArray(group.members) ? group.members : []
+    const standingList = Array.isArray(standings) ? standings : []
+
+    const activeGames = gameList.filter(g => g.is_active)
+    const pastGames = gameList.filter(g => !g.is_active)
+    const rankedStandings = [...standingList].sort((a, b) =>
         (Number(b.total_cash_out) - Number(b.total_buy_in)) - (Number(a.total_cash_out) - Number(a.total_buy_in))
     )
 
-    return (
-        <div className="app-shell">
-            <div className="game-header">
-                <button className="icon-btn icon-btn--neutral" onClick={() => navigate('/groups')} aria-label="Back">←</button>
-                <div className="game-header__info">
-                    <span className="game-header__location">{group.name}</span>
-                    <span className="game-header__date">{group.members.length} member{group.members.length === 1 ? '' : 's'}</span>
-                </div>
-            </div>
+    function renderGame(g) {
+        const mine = g.created_by_user_id === myUserId
+        return (
+            <button
+                key={g.id}
+                className={`row row--link${g.is_active ? '' : ' row--muted'}`}
+                onClick={() => navigate(`/game/${g.id}`)}
+            >
+                <span className="avatar avatar--square"><IconSpade size={20} /></span>
+                <span className="row__body">
+                    <span className="row__title">{g.location || 'Untitled game'}</span>
+                    <span className="row__meta">
+                        {formatGameDate(g.date)}
+                        {mine && <><span className="row__dot">·</span><span className="tag tag--host">You hosted</span></>}
+                        {!g.is_active && <><span className="row__dot">·</span><span className="tag tag--ended">Ended</span></>}
+                    </span>
+                </span>
+                <span className="row__trail">
+                    <span className="row__chevron"><IconChevronRight size={18} /></span>
+                </span>
+            </button>
+        )
+    }
 
-            <div className="page-content">
-                <form onSubmit={handleSubmit}>
+    return (
+        <main className="page">
+            <header className="page__head">
+                <button className="page__back" onClick={() => navigate('/groups')}>
+                    <IconChevronLeft size={16} />
+                    Groups
+                </button>
+                <div className="page__bar">
+                    <div className="page__titles">
+                        <span className="page__eyebrow">Group</span>
+                        <h1 className="page__title">{group.name}</h1>
+                        <p className="page__sub">
+                            {plural(memberList.length, 'member')}
+                            {gameList.length > 0 && ` · ${plural(gameList.length, 'session')}`}
+                        </p>
+                    </div>
+                    <div className="page__actions">
+                        <button className="btn btn--primary btn--sm" onClick={() => navigate('/create')}>
+                            New session
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* ---- members ---- */}
+            <section className="section">
+                <div className="section__head">
+                    <h2 className="section__title">Members</h2>
+                    <span className="section__count">{memberList.length}</span>
+                </div>
+                <p className="hint hint--inline">
+                    Anyone here can open this group's sessions. Add someone by the email on their
+                    Google account — they need to have signed in to Rebuy at least once.
+                </p>
+
+                <form className="inline-form" onSubmit={handleSubmit}>
                     <input
+                        className="input"
                         type="email"
-                        placeholder="Friend's email"
+                        placeholder="friend@example.com"
+                        aria-label="Member email"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                     />
-                    <button type="submit">Add Member</button>
+                    <button className="btn btn--secondary" type="submit">
+                        <IconMail size={16} />
+                        Add
+                    </button>
                 </form>
-                <div>
-                    <div className="section-title">
-                        <h2>🪑 Members</h2>
-                        <span className="section-count">{group.members.length}</span>
-                    </div>
 
-                    {group.members.length === 0 ? (
-                        <div className="empty-state">No members yet</div>
-                    ) : (
-                        <div className="player-list">
-                            {group.members.map(m => (
-                                <div key={m.email} className="player-card">
-                                    <div className="player-card__avatar">{m.display_name?.[0]?.toUpperCase() || '?'}</div>
-                                    <div className="player-card__info">
-                                        <span className="player-card__name">{m.display_name}</span>
-                                        <span className="player-card__buyin">{m.email}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <div>
-                    <div className="section-title">
-                        <h2>🟢 Active Sessions</h2>
-                        <span className="section-count">{activeGames.length}</span>
+                {memberList.length === 0 ? (
+                    <div className="empty empty--sm">
+                        <span className="empty__icon"><IconUser size={20} /></span>
+                        <span className="empty__title">No members yet</span>
                     </div>
-                    {activeGames.length === 0 ? (
-                        <div className="empty-state">No active sessions</div>
-                    ) : (
-                        <div className="player-list">
-                            {activeGames.map(g => (
-                                <div key={g.id} className="player-card" onClick={() => navigate(`/game/${g.id}`)}>
-                                    <div className="player-card__avatar">♠</div>
-                                    <div className="player-card__info">
-                                        <span className="player-card__name">{g.location}</span>
-                                        <span className="player-card__buyin">{g.date}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                ) : (
+                    <div className="list">
+                        {memberList.map(m => (
+                            <div key={m.email} className="row">
+                                <span className="avatar avatar--sm">{m.display_name?.[0]?.toUpperCase() || '?'}</span>
+                                <span className="row__body">
+                                    <span className="row__title">{m.display_name}</span>
+                                    <span className="row__meta">{m.email}</span>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
 
-                <div>
-                    <div className="section-title">
-                        <h2>🕘 Past Games</h2>
-                        <span className="section-count">{pastGames.length}</span>
-                    </div>
-                    {pastGames.length === 0 ? (
-                        <div className="empty-state">No past games</div>
-                    ) : (
-                        <div className="player-list">
-                            {pastGames.map(g => (
-                                <div key={g.id} className="player-card" onClick={() => navigate(`/game/${g.id}`)}>
-                                    <div className="player-card__avatar">♠</div>
-                                    <div className="player-card__info">
-                                        <span className="player-card__name">{g.location}</span>
-                                        <span className="player-card__buyin">{g.date}</span>
-                                    </div>
-                                    <div className="player-card__right">
-                                        <span className="status-pill status-pill--rejected">Ended</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+            {/* ---- active sessions ---- */}
+            <section className="section">
+                <div className="section__head">
+                    <h2 className="section__title">Active sessions</h2>
+                    <span className="section__count">{activeGames.length}</span>
                 </div>
+                {activeGames.length === 0 ? (
+                    <div className="empty empty--sm">
+                        <span className="empty__icon"><IconClock size={20} /></span>
+                        <span className="empty__title">Nothing running right now</span>
+                        <span className="empty__text">
+                            Start a session and attach it to this group to see it here.
+                        </span>
+                    </div>
+                ) : (
+                    <div className="list--grid">{activeGames.map(renderGame)}</div>
+                )}
+            </section>
 
-                <div>
-                    <div className="section-title">
-                        <h2>🏆 Standings</h2>
-                        <span className="section-count">{rankedStandings.length}</span>
-                    </div>
-                    {rankedStandings.length === 0 ? (
-                        <div className="empty-state">No stats yet</div>
-                    ) : (
-                        <div className="player-list">
-                            {rankedStandings.map(s => {
-                                const profit = Number(s.total_cash_out) - Number(s.total_buy_in)
-                                return (
-                                    <div key={s.user_id} className="player-card">
-                                        <div className="player-card__avatar">{s.display_name?.[0]?.toUpperCase() || '?'}</div>
-                                        <div className="player-card__info">
-                                            <span className="player-card__name">{s.display_name}</span>
-                                            <span className="player-card__buyin">Buy-in {formatMoney(s.total_buy_in)} · Cash-out {formatMoney(s.total_cash_out)}</span>
-                                        </div>
-                                        <div className="player-card__right">
-                                            <span className={`profit-pill ${profit > 0 ? 'profit-pill--positive' : profit < 0 ? 'profit-pill--negative' : 'profit-pill--neutral'}`}>
-                                                {profit > 0 ? '+' : ''}{formatMoney(profit)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
+            {/* ---- past games ---- */}
+            <section className="section">
+                <div className="section__head">
+                    <h2 className="section__title">Past games</h2>
+                    <span className="section__count">{pastGames.length}</span>
                 </div>
-            </div>
-        </div>
+                {pastGames.length === 0 ? (
+                    <div className="empty empty--sm">
+                        <span className="empty__icon"><IconGames size={20} /></span>
+                        <span className="empty__title">No finished games yet</span>
+                    </div>
+                ) : (
+                    <div className="list--grid">{pastGames.map(renderGame)}</div>
+                )}
+            </section>
+
+            {/* ---- standings ---- */}
+            <section className="section">
+                <div className="section__head">
+                    <h2 className="section__title">Standings</h2>
+                    <span className="section__count">{rankedStandings.length}</span>
+                </div>
+                <p className="hint hint--inline">
+                    Every approved buy-in and cash-out from this group's sessions, added up per
+                    member. Games outside this group don't count.
+                </p>
+
+                {rankedStandings.length === 0 ? (
+                    <div className="empty empty--sm">
+                        <span className="empty__icon"><IconTrophy size={20} /></span>
+                        <span className="empty__title">No results yet</span>
+                        <span className="empty__text">
+                            Standings appear once a session in this group has approved transactions.
+                        </span>
+                    </div>
+                ) : (
+                    <div className="list">
+                        {rankedStandings.map((s, i) => {
+                            const profit = Number(s.total_cash_out) - Number(s.total_buy_in)
+                            const played = Number(s.total_buy_in) > 0 || Number(s.total_cash_out) > 0
+                            return (
+                                <div key={s.user_id} className="row">
+                                    <span className={`rank${i === 0 && played ? ' rank--1' : ''}`}>{i + 1}</span>
+                                    <span className="avatar avatar--sm">{s.display_name?.[0]?.toUpperCase() || '?'}</span>
+                                    <span className="row__body">
+                                        <span className="row__title">{s.display_name}</span>
+                                        <span className="row__meta">
+                                            {played
+                                                ? <>In {formatMoney(s.total_buy_in)}<span className="row__dot">·</span>Out {formatMoney(s.total_cash_out)}</>
+                                                : 'Hasn’t played a session yet'}
+                                        </span>
+                                    </span>
+                                    <span className="row__trail">
+                                        <span className={`pill ${profit > 0 ? 'pill--up' : profit < 0 ? 'pill--down' : 'pill--flat'}`}>
+                                            {formatSigned(profit)}
+                                        </span>
+                                    </span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </section>
+        </main>
     )
 
 }

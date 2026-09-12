@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { authHeaders } from "../utils/authHeaders"
+import { IconChevronLeft } from './Icons'
 
 function CreateGroup() {
     const [name, setName] = useState('')
@@ -19,27 +20,40 @@ function CreateGroup() {
     }
 
     return (
-        <div className="screen-center">
-            <div className="brand-mark">👥</div>
-            <h1 className="entry-title">Create Group</h1>
-            <p className="entry-subtitle">Name your group of regulars</p>
+        <main className="page page--narrow">
+            <header className="page__head">
+                <button className="page__back" onClick={() => navigate('/groups')}>
+                    <IconChevronLeft size={16} />
+                    Groups
+                </button>
+                <div className="page__titles">
+                    <h1 className="page__title">New group</h1>
+                    <p className="page__sub">
+                        A group is your regular crew. Sessions you attach to it stack up into shared
+                        history and season standings.
+                    </p>
+                </div>
+            </header>
 
-            <form className="form-card" style={{ width: '100%' }} onSubmit={handleSubmit}>
-                <div className="form-group">
-                    <label className="form-label" htmlFor="name">Group Name</label>
+            <form className="card form" onSubmit={handleSubmit}>
+                <div className="field">
+                    <label className="label" htmlFor="name">Group name</label>
                     <input
-                        className="form-input"
+                        className="input"
                         id="name"
                         type="text"
                         placeholder="e.g. Friday Crew"
                         value={name}
                         onChange={e => setName(e.target.value)}
                     />
+                    <p className="field__hint">
+                        You'll be added automatically. Invite the rest by email on the next screen.
+                    </p>
                 </div>
 
-                <button className="btn btn-primary btn-block" type="submit">Create Group</button>
+                <button className="btn btn--primary btn--lg btn--block" type="submit">Create group</button>
             </form>
-        </div>
+        </main>
     )
 }
 
