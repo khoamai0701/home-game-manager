@@ -11,6 +11,7 @@ import jwt from 'jsonwebtoken'
 import requireAuth from './middleware/requireAuth.js'
 import groupsRouter from './routes/groups.js'
 import statsRouter from './routes/stats.js'
+import usersRouter from './routes/users.js'
 
 
 
@@ -42,20 +43,21 @@ app.use('/api/players', requireAuth, playersRouter(io))
 app.use('/api/transactions', requireAuth,  transactionsRouter(io))
 app.use('/api/groups', requireAuth, groupsRouter)
 app.use('/api/stats', requireAuth, statsRouter)
+app.use('/api/users', requireAuth, usersRouter)
 
 app.get('/api/auth/google', (req, res, next) => {
-    const state =  req.query.redirect || '/home'
-    passport.authenticate('google', {scope: ['profile', 'email'], state})(req, res, next)
+    // `redirect` is our param name end-to-end; Google's OAuth `state` field is
+    // just the vehicle that carries it through the round trip to Google and back.
+    const redirectPath = req.query.redirect || '/home'
+    passport.authenticate('google', {scope: ['profile', 'email'], state: redirectPath})(req, res, next)
 })
 
 app.get('/api/auth/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
     const token = jwt.sign({ userId: req.user.id}, process.env.JWT_SECRET, {expiresIn: '7d'})
     const redirectPath = req.query.state || '/home'
-    res.redirect(`https://home-game-manager.vercel.app/auth/callback?token=${token}&state=${redirectPath}`)
-    
-}
+    res.redirect(`https://home-game-manager.vercel.app/auth/callback?token=${token}&redirect=${encodeURIComponent(redirectPath)}`)
 
-)
+})
 
 // Fallback error handler so a thrown/rejected route handler returns JSON
 // instead of a bare 500 (or crashing the process on older Express).

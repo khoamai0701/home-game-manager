@@ -29,7 +29,8 @@ router.get('/:group_id', async (req, res) => {
             ), 0) AS total_buy_in,
             COALESCE(SUM(transactions.amount) FILTER (
                 WHERE transactions.type = 'cashout' AND transactions.status = 'approved' AND games.group_id = $1
-            ), 0) AS total_cash_out
+            ), 0) AS total_cash_out,
+            COUNT(DISTINCT transactions.game_id) FILTER (WHERE games.group_id = $1) AS games_played
         FROM group_members
         JOIN users ON users.id = group_members.user_id
         LEFT JOIN players ON players.user_id = group_members.user_id

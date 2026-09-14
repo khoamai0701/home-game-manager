@@ -17,6 +17,15 @@ export default function(io) {
     router.post('/', async (req, res) => {
         const { game_id, cashOut } = req.body
         const userId = req.user.userId
+
+        const gameResult = await pool.query('SELECT is_active FROM games WHERE id = $1', [game_id])
+        if (gameResult.rowCount === 0) {
+            return res.status(404).json({ error: 'Game not found' })
+        }
+        if (gameResult.rows[0].is_active === false) {
+            return res.status(403).json({ error: 'This game has ended and is read-only' })
+        }
+
         const userResult = await pool.query(`SELECT display_name FROM users WHERE id = $1`, [userId])
         const name = userResult.rows[0].display_name
 

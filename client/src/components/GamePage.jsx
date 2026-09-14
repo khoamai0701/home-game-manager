@@ -4,6 +4,7 @@
     import { io } from 'socket.io-client'
     import { authHeaders, getCurrentUserId } from "../utils/authHeaders.js"
     import { formatMoney, formatSigned, formatGameDate, formatTime } from "../utils/format.js"
+    import { computeSettlements } from "../utils/settleUp.js"
     import {
         IconChevronLeft, IconLink, IconCheck, IconEdit, IconTrash, IconPlus,
         IconChips, IconFlag, IconUser, IconInbox, IconClock, IconSpade,
@@ -43,14 +44,17 @@
         const [linkCopied, setLinkCopied] = useState(false)
         const [toast, setToast] = useState(null)
         const [confirmDeletePlayer, setConfirmDeletePlayer] = useState(null)
+        const [confirmDeleteGame, setConfirmDeleteGame] = useState(false)
         const [historyPlayer, setHistoryPlayer] = useState(null)
         const [needsLogin, setNeedsLogin] = useState(false)
+        const [loadError, setLoadError] = useState(false)
         const myUserId = getCurrentUserId()
 
         // Identity is now derived from the logged-in account rather than
         // localStorage: whichever player row (if any) belongs to this user.
         const currentPlayer = players.find(p => p.user_id === myUserId) || null
         const isHost = game?.created_by_user_id === myUserId
+        const isEnded = Boolean(game) && game.is_active === false
 
         // Socket listeners are attached once per game id; use refs so those
         // closures can see the *current* player/host status without re-subscribing.
@@ -142,6 +146,7 @@
 
         useEffect(() => {
             let cancelled = false
+            setLoadError(false)
 
             fetch(`/api/games/${id}`, {
                 headers: authHeaders()
@@ -149,11 +154,14 @@
                 .then(res => {
                     if (res.status === 401) {
                         setNeedsLogin(true)
+                        return Promise.reject(new Error('unauthorized'))
                     }
                     return res.ok ? res.json() : Promise.reject(new Error('games fetch failed'))
                 })
                 .then(data => { if (!cancelled) setGame(data) })
-                .catch(() => {})
+                .catch(err => {
+                    if (!cancelled && err.message !== 'unauthorized') setLoadError(true)
+                })
 
             fetch(`/api/players/${id}`, {
                 headers: authHeaders()
@@ -180,6 +188,7 @@
         }
         async function handleSubmit(e) {
             e.preventDefault()
+            if (isEnded) return
 
 
             const response = await fetch('/api/players', {
@@ -191,6 +200,10 @@
 
 
             const data = await response.json()
+            if (!response.ok) {
+                showToast(data.error || 'Could not join the game')
+                return
+            }
             // Optimistic local update — the 'player-added' socket event will also
             // deliver this, but the dedupe check makes that a no-op.
             setPlayers(prev => prev.some(p => p.id === data.id) ? prev : [...prev, data])
@@ -209,14 +222,22 @@
                 })
             })
 
-            await response2.json()
+            const newTransaction = await response2.json()
+            if (response2.ok) {
+                // Same dedupe-on-id pattern as the socket handlers above — this
+                // makes the buy-in show up immediately instead of waiting on the
+                // 'transaction-added' event to arrive.
+                setTransactions(prev =>
+                    prev.some(t => t.id === newTransaction.id) ? prev : [...prev, newTransaction]
+                )
+            }
 
             setPlayersForm(DEFAULT_FORM)
 
         }
 
         async function handleTopOff() {
-            if (isCashedOut || myPendingCashout) return
+            if (isCashedOut || myPendingCashout || isEnded) return
             const response = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: {'Content-type' : 'application/json', ...authHeaders()},
@@ -229,13 +250,20 @@
                 })
             })
 
-            await response.json()
+            const newTransaction = await response.json()
+            if (response.ok) {
+                setTransactions(prev =>
+                    prev.some(t => t.id === newTransaction.id) ? prev : [...prev, newTransaction]
+                )
+            } else {
+                showToast(newTransaction.error || 'Could not request a top-off')
+            }
 
             setTopOff('')
         }
 
         async function handleCashOutSubmit() {
-            if (isCashedOut || myPendingCashout) { setView(previousView); return }
+            if (isCashedOut || myPendingCashout || isEnded) { setView(previousView); return }
             const response = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: {'Content-type' : 'application/json', ...authHeaders()},
@@ -248,7 +276,14 @@
                 })
             })
 
-            await response.json()
+            const newTransaction = await response.json()
+            if (response.ok) {
+                setTransactions(prev =>
+                    prev.some(t => t.id === newTransaction.id) ? prev : [...prev, newTransaction]
+                )
+            } else {
+                showToast(newTransaction.error || 'Could not request a cash-out')
+            }
 
             setCashOut('')
             setView(previousView)
@@ -273,17 +308,28 @@
             }
 
             console.log('[handleApprove] ok', body)
-            // Backup path — the warning normally arrives over the socket
-            // ('cashflow-warning'); showToast dedupes so this is harmless.
-            if (body && body.warning) showToast(body.warning)
+
+            if (body) {
+                const { warning, ...updatedTransaction } = body
+                // Update locally right away — the socket's 'transaction-updated'
+                // will also deliver this, but matching by id makes it a no-op.
+                setTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t))
+                // Backup path — the warning normally arrives over the socket
+                // ('cashflow-warning'); showToast dedupes so this is harmless.
+                if (warning) showToast(warning)
+            }
         }
 
         async function handleReject(transactionId) {
-            await fetch(`/api/transactions/${transactionId}`, {
+            const res = await fetch(`/api/transactions/${transactionId}`, {
                 method: 'PATCH',
                 headers: {'Content-Type': 'application/json', ...authHeaders()},
                 body: JSON.stringify({ status: 'rejected' })
             })
+            if (res.ok) {
+                const { warning: _warning, ...updated } = await res.json()
+                setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t))
+            }
             showToast('Request rejected')
         }
 
@@ -359,6 +405,19 @@
             setGame(updated)
 
         }
+
+        async function handleDeleteGame() {
+            const res = await fetch(`/api/games/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders()
+            })
+            setConfirmDeleteGame(false)
+            if (res.ok || res.status === 204) {
+                navigate('/games')
+            } else {
+                showToast('Could not delete game')
+            }
+        }
         if (needsLogin) {
             return (
                 <main className="page page--narrow page--center">
@@ -371,10 +430,27 @@
                         </span>
                         <a
                             className="btn btn--primary"
-                            href={`https://home-game-manager-production.up.railway.app/api/auth/google?redirect=/game/${id}`}
+                            href={`https://home-game-manager-production.up.railway.app/api/auth/google?redirect=${encodeURIComponent(`/game/${id}`)}`}
                         >
                             Sign in with Google
                         </a>
+                    </div>
+                </main>
+            )
+        }
+
+        if (loadError) {
+            return (
+                <main className="page page--narrow page--center">
+                    <div className="empty">
+                        <span className="empty__icon"><IconFlag size={22} /></span>
+                        <span className="empty__title">Couldn't load this game</span>
+                        <span className="empty__text">
+                            Check your connection and try again.
+                        </span>
+                        <button className="btn btn--primary btn--sm" onClick={() => window.location.reload()}>
+                            Try again
+                        </button>
                     </div>
                 </main>
             )
@@ -451,6 +527,16 @@
             .reduce((sum, t) => sum + Number(t.amount), 0)
         const netCashFlow = totalOut - totalIn // 0 when every chip is accounted for
 
+        const allCashedOut = players.length > 0 && players.every(p => p.cashed_out)
+        const settlements = isEnded
+            ? computeSettlements(players.map(p => {
+                const approved = transactions.filter(t => t.player_id === p.id && t.status === 'approved')
+                const buyIn = approved.filter(t => t.type !== 'cashout').reduce((sum, t) => sum + Number(t.amount), 0)
+                const cashOut = approved.filter(t => t.type === 'cashout').reduce((sum, t) => sum + Number(t.amount), 0)
+                return { name: p.name, amount: cashOut - buyIn }
+            }))
+            : []
+
     return (
         <main className="page">
             {toastEl}
@@ -463,12 +549,12 @@
                 <div className="page__bar">
                     <div className="page__titles">
                         <span className="page__eyebrow">
-                            {game.is_active === false ? 'Finished session' : 'Live session'}
+                            {isEnded ? 'Finished session' : 'Live session'}
                         </span>
                         <h1 className="page__title">{game.location || 'Untitled game'}</h1>
                         <p className="page__sub">
                             {formatGameDate(game.date)}
-                            {game.is_active === false
+                            {isEnded
                                 ? <> · <span className="tag tag--ended">Game ended</span></>
                                 : <> · <span className="tag tag--live"><span className="dot dot--pulse" />Live</span></>}
                             {isHost && <> · <span className="tag tag--host">You're hosting</span></>}
@@ -481,11 +567,14 @@
                                 {linkCopied ? <IconCheck size={16} /> : <IconLink size={16} />}
                                 {linkCopied ? 'Copied' : 'Share'}
                             </button>
-                            {game.is_active !== false && (
+                            {!isEnded && (
                                 <button className="btn btn--danger btn--sm" onClick={handleEndGame}>
                                     End game
                                 </button>
                             )}
+                            <button className="btn btn--danger btn--sm" onClick={() => setConfirmDeleteGame(true)}>
+                                Delete
+                            </button>
                         </div>
                     )}
                 </div>
@@ -528,6 +617,13 @@
                                     Waiting for the host to approve your cash-out. Top-offs are paused until they do.
                                 </p>
                             </div>
+                        ) : isEnded ? (
+                            <div className="panel panel--quiet">
+                                <span className="panel__title">Game ended</span>
+                                <p className="panel__note">
+                                    The host ended this game. No more top-offs or cash-outs can be made.
+                                </p>
+                            </div>
                         ) : (
                             <div className="panel panel--accent">
                                 <span className="panel__title">Top off your stack</span>
@@ -550,6 +646,11 @@
                                 </div>
                             </div>
                         )
+                    ) : isEnded ? (
+                        <div className="panel panel--quiet">
+                            <span className="panel__title">Game ended</span>
+                            <p className="panel__note">This game has ended, so new players can no longer join.</p>
+                        </div>
                     ) : (
                         <form className="panel panel--accent" onSubmit={handleSubmit}>
                             <span className="panel__title">Take a seat</span>
@@ -629,6 +730,39 @@
                             </div>
                         )}
                     </section>
+
+                    {/* ---- settle up ---- */}
+                    {isEnded && (
+                        <section className="section">
+                            <div className="section__head">
+                                <h2 className="section__title">Settle up</h2>
+                            </div>
+                            <p className="hint hint--inline">
+                                The smallest set of payments that settles this table.
+                                {!allCashedOut && ' Anyone who hasn\'t cashed out yet is treated as $0 owed to them for this estimate.'}
+                            </p>
+
+                            {settlements.length === 0 ? (
+                                <div className="empty empty--sm">
+                                    <span className="empty__icon"><IconCheck size={20} /></span>
+                                    <span className="empty__title">Already settled — nobody owes anything</span>
+                                </div>
+                            ) : (
+                                <div className="list">
+                                    {settlements.map((s, i) => (
+                                        <div key={i} className="row">
+                                            <span className="row__body">
+                                                <span className="row__title">{s.from} → {s.to}</span>
+                                            </span>
+                                            <span className="row__trail">
+                                                <span className="pill pill--flat">{formatMoney(s.amount)}</span>
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    )}
                 </div>
 
                 <div className="game-col">
@@ -732,6 +866,26 @@
                         <div className="modal__actions">
                             <button className="btn btn--danger btn--block" onClick={confirmDelete}>Remove player</button>
                             <button className="btn btn--secondary btn--block" onClick={() => setConfirmDeletePlayer(null)}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {confirmDeleteGame && (
+                <div className="modal" onClick={() => setConfirmDeleteGame(false)}>
+                    <div className="modal__card" onClick={e => e.stopPropagation()}>
+                        <div className="modal__head">
+                            <div>
+                                <h2 className="modal__title">Delete this game?</h2>
+                                <span className="modal__sub">
+                                    This permanently deletes {game.location || 'this game'} and every buy-in,
+                                    top-off and cash-out in it. This can't be undone.
+                                </span>
+                            </div>
+                        </div>
+                        <div className="modal__actions">
+                            <button className="btn btn--danger btn--block" onClick={handleDeleteGame}>Delete game</button>
+                            <button className="btn btn--secondary btn--block" onClick={() => setConfirmDeleteGame(false)}>Cancel</button>
                         </div>
                     </div>
                 </div>

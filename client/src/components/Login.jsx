@@ -1,9 +1,17 @@
+import { useSearchParams } from 'react-router-dom'
 import { LogoMark } from './Logo'
 import { IconChips, IconGroups, IconStats } from './Icons'
 
 const API_ORIGIN = 'https://home-game-manager-production.up.railway.app'
 
 function Login() {
+  const [searchParams] = useSearchParams()
+  // RequireAuth and the session-expiry guard both send visitors here with
+  // `?next=` set to wherever they were headed, so signing in lands them back
+  // there instead of always dropping them on the dashboard.
+  const redirectPath = searchParams.get('next') || '/home'
+  const signInHref = `${API_ORIGIN}/api/auth/google?redirect=${encodeURIComponent(redirectPath)}`
+
   return (
     <div className="login">
       <div className="login__inner">
@@ -17,7 +25,7 @@ function Login() {
           without the argument.
         </p>
 
-        <a className="btn btn--primary btn--lg btn--block" href={`${API_ORIGIN}/api/auth/google`}>
+        <a className="btn btn--primary btn--lg btn--block" href={signInHref}>
           Sign in with Google
         </a>
 

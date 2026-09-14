@@ -2,9 +2,10 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { authHeaders, getCurrentUserId } from "../utils/authHeaders"
 import { formatMoney, formatSigned, formatGameDate, plural } from "../utils/format"
+import { computeSettlements } from "../utils/settleUp"
 import {
     IconChevronLeft, IconChevronRight, IconSpade, IconUser,
-    IconTrophy, IconGames, IconMail, IconClock,
+    IconTrophy, IconGames, IconMail, IconClock, IconTrash, IconCheck,
 } from './Icons'
 
 const DEFAULT_GROUP = {
@@ -21,6 +22,11 @@ function GroupDetails() {
     const [standings, setStandings] = useState([])
     const navigate = useNavigate()
     const [email, setEmail] = useState('')
+    const [memberError, setMemberError] = useState('')
+    const [renaming, setRenaming] = useState(false)
+    const [nameDraft, setNameDraft] = useState('')
+    const [renameError, setRenameError] = useState('')
+    const [confirmAction, setConfirmAction] = useState(null) // null | 'delete' | 'leave'
     const myUserId = getCurrentUserId()
 
     useEffect(() => {
@@ -37,8 +43,10 @@ function GroupDetails() {
         .then(res => res.json())
         .then(data => setStandings(data))
     }, [id])
+
     async function handleSubmit(e) {
         e.preventDefault()
+        setMemberError('')
 
         const response = await fetch(`/api/groups/${id}/members`, {
             method: 'POST',
@@ -48,10 +56,10 @@ function GroupDetails() {
 
         if (!response.ok) {
             const errorData = await response.json()
-            alert(errorData.error)
+            setMemberError(errorData.error || 'Could not add member')
             return
         }
-        const data = await response.json()
+        await response.json()
         setEmail('')
         fetchGroup()
     }
@@ -64,6 +72,54 @@ function GroupDetails() {
         .then(data => setGroup(data))
     }
 
+    function startRename() {
+        setNameDraft(group.name)
+        setRenameError('')
+        setRenaming(true)
+    }
+
+    async function handleRename(e) {
+        e.preventDefault()
+        setRenameError('')
+
+        const response = await fetch(`/api/groups/${id}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json', ...authHeaders()},
+            body: JSON.stringify({ name: nameDraft })
+        })
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            setRenameError(errorData.error || 'Could not rename group')
+            return
+        }
+        const updated = await response.json()
+        setGroup(prev => ({ ...prev, name: updated.name }))
+        setRenaming(false)
+    }
+
+    async function handleConfirmAction() {
+        if (confirmAction === 'delete') {
+            const response = await fetch(`/api/groups/${id}`, { method: 'DELETE', headers: authHeaders() })
+            setConfirmAction(null)
+            if (response.ok || response.status === 204) navigate('/groups')
+        } else if (confirmAction === 'leave') {
+            const response = await fetch(`/api/groups/${id}/members/${myUserId}`, { method: 'DELETE', headers: authHeaders() })
+            setConfirmAction(null)
+            if (response.ok || response.status === 204) navigate('/groups')
+        }
+    }
+
+    async function handleRemoveMember(userId) {
+        const response = await fetch(`/api/groups/${id}/members/${userId}`, {
+            method: 'DELETE',
+            headers: authHeaders()
+        })
+        if (response.ok || response.status === 204) {
+            setGroup(prev => ({ ...prev, members: prev.members.filter(m => m.user_id !== userId) }))
+        }
+    }
+
     // These endpoints hand back an error object rather than an array on 401 /
     // outage; render against safe lists so that degrades to empty states rather
     // than a blank screen.
@@ -71,10 +127,14 @@ function GroupDetails() {
     const memberList = Array.isArray(group.members) ? group.members : []
     const standingList = Array.isArray(standings) ? standings : []
 
+    const isCreator = group.created_by_user_id === myUserId
     const activeGames = gameList.filter(g => g.is_active)
     const pastGames = gameList.filter(g => !g.is_active)
     const rankedStandings = [...standingList].sort((a, b) =>
         (Number(b.total_cash_out) - Number(b.total_buy_in)) - (Number(a.total_cash_out) - Number(a.total_buy_in))
+    )
+    const groupSettlements = computeSettlements(
+        rankedStandings.map(s => ({ name: s.display_name, amount: Number(s.total_cash_out) - Number(s.total_buy_in) }))
     )
 
     function renderGame(g) {
@@ -111,7 +171,22 @@ function GroupDetails() {
                 <div className="page__bar">
                     <div className="page__titles">
                         <span className="page__eyebrow">Group</span>
-                        <h1 className="page__title">{group.name}</h1>
+                        {renaming ? (
+                            <form className="inline-form" onSubmit={handleRename}>
+                                <input
+                                    className="input"
+                                    value={nameDraft}
+                                    onChange={e => setNameDraft(e.target.value)}
+                                    aria-label="Group name"
+                                    autoFocus
+                                />
+                                <button className="btn btn--primary btn--sm" type="submit">Save</button>
+                                <button className="btn btn--ghost btn--sm" type="button" onClick={() => setRenaming(false)}>Cancel</button>
+                            </form>
+                        ) : (
+                            <h1 className="page__title">{group.name}</h1>
+                        )}
+                        {renameError && <p className="form__error">{renameError}</p>}
                         <p className="page__sub">
                             {plural(memberList.length, 'member')}
                             {gameList.length > 0 && ` · ${plural(gameList.length, 'session')}`}
@@ -121,6 +196,14 @@ function GroupDetails() {
                         <button className="btn btn--primary btn--sm" onClick={() => navigate('/create')}>
                             New session
                         </button>
+                        {isCreator ? (
+                            <>
+                                <button className="btn btn--secondary btn--sm" onClick={startRename}>Rename</button>
+                                <button className="btn btn--danger btn--sm" onClick={() => setConfirmAction('delete')}>Delete</button>
+                            </>
+                        ) : (
+                            <button className="btn btn--danger btn--sm" onClick={() => setConfirmAction('leave')}>Leave</button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -150,6 +233,7 @@ function GroupDetails() {
                         Add
                     </button>
                 </form>
+                {memberError && <p className="form__error">{memberError}</p>}
 
                 {memberList.length === 0 ? (
                     <div className="empty empty--sm">
@@ -159,12 +243,26 @@ function GroupDetails() {
                 ) : (
                     <div className="list">
                         {memberList.map(m => (
-                            <div key={m.email} className="row">
+                            <div key={m.user_id ?? m.email} className="row">
                                 <span className="avatar avatar--sm">{m.display_name?.[0]?.toUpperCase() || '?'}</span>
                                 <span className="row__body">
-                                    <span className="row__title">{m.display_name}</span>
+                                    <span className="row__title">
+                                        {m.display_name}
+                                        {m.user_id === myUserId && <span className="tag tag--you">You</span>}
+                                    </span>
                                     <span className="row__meta">{m.email}</span>
                                 </span>
+                                {isCreator && m.user_id !== myUserId && (
+                                    <span className="row__trail">
+                                        <button
+                                            className="iconbtn iconbtn--danger"
+                                            onClick={() => handleRemoveMember(m.user_id)}
+                                            aria-label={`Remove ${m.display_name}`}
+                                        >
+                                            <IconTrash size={16} />
+                                        </button>
+                                    </span>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -229,7 +327,8 @@ function GroupDetails() {
                     <div className="list">
                         {rankedStandings.map((s, i) => {
                             const profit = Number(s.total_cash_out) - Number(s.total_buy_in)
-                            const played = Number(s.total_buy_in) > 0 || Number(s.total_cash_out) > 0
+                            const gamesPlayed = Number(s.games_played) || 0
+                            const played = gamesPlayed > 0
                             return (
                                 <div key={s.user_id} className="row">
                                     <span className={`rank${i === 0 && played ? ' rank--1' : ''}`}>{i + 1}</span>
@@ -238,7 +337,13 @@ function GroupDetails() {
                                         <span className="row__title">{s.display_name}</span>
                                         <span className="row__meta">
                                             {played
-                                                ? <>In {formatMoney(s.total_buy_in)}<span className="row__dot">·</span>Out {formatMoney(s.total_cash_out)}</>
+                                                ? <>
+                                                    {plural(gamesPlayed, 'game')}
+                                                    <span className="row__dot">·</span>
+                                                    In {formatMoney(s.total_buy_in)}
+                                                    <span className="row__dot">·</span>
+                                                    Out {formatMoney(s.total_cash_out)}
+                                                </>
                                                 : 'Hasn’t played a session yet'}
                                         </span>
                                     </span>
@@ -253,6 +358,62 @@ function GroupDetails() {
                     </div>
                 )}
             </section>
+
+            {/* ---- settle up ---- */}
+            <section className="section">
+                <div className="section__head">
+                    <h2 className="section__title">Settle up</h2>
+                </div>
+                <p className="hint hint--inline">
+                    The smallest set of payments that settles this group's balance sheet, based on
+                    approved transactions across all of its games.
+                </p>
+
+                {groupSettlements.length === 0 ? (
+                    <div className="empty empty--sm">
+                        <span className="empty__icon"><IconCheck size={20} /></span>
+                        <span className="empty__title">Already settled</span>
+                    </div>
+                ) : (
+                    <div className="list">
+                        {groupSettlements.map((s, i) => (
+                            <div key={i} className="row">
+                                <span className="row__body">
+                                    <span className="row__title">{s.from} → {s.to}</span>
+                                </span>
+                                <span className="row__trail">
+                                    <span className="pill pill--flat">{formatMoney(s.amount)}</span>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </section>
+
+            {confirmAction && (
+                <div className="modal" onClick={() => setConfirmAction(null)}>
+                    <div className="modal__card" onClick={e => e.stopPropagation()}>
+                        <div className="modal__head">
+                            <div>
+                                <h2 className="modal__title">
+                                    {confirmAction === 'delete' ? `Delete ${group.name}?` : `Leave ${group.name}?`}
+                                </h2>
+                                <span className="modal__sub">
+                                    {confirmAction === 'delete'
+                                        ? "This removes the group for everyone. Games already played stay in each player's own history."
+                                        : "You'll need a new invite to rejoin."}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="modal__actions">
+                            <button className="btn btn--danger btn--block" onClick={handleConfirmAction}>
+                                {confirmAction === 'delete' ? 'Delete group' : 'Leave group'}
+                            </button>
+                            <button className="btn btn--secondary btn--block" onClick={() => setConfirmAction(null)}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     )
 

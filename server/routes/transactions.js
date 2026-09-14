@@ -17,6 +17,15 @@ router.get('/:game_id', async (req, res) => {
 
 router.post('/', async (req, res) => {
     const { player_id, game_id, amount, type, status } = req.body
+
+    const gameResult = await pool.query('SELECT is_active FROM games WHERE id = $1', [game_id])
+    if (gameResult.rowCount === 0) {
+        return res.status(404).json({ error: 'Game not found' })
+    }
+    if (gameResult.rows[0].is_active === false) {
+        return res.status(403).json({ error: 'This game has ended and is read-only' })
+    }
+
     const created_at = new Date().toISOString()
 
     const result = await pool.query(`INSERT INTO transactions (player_id, game_id, created_at, amount, type, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`, [player_id, game_id, created_at, amount, type, status])

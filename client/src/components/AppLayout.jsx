@@ -1,12 +1,13 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import Logo from './Logo'
-import { IconHome, IconGames, IconGroups, IconStats, IconSignOut } from './Icons'
+import { IconHome, IconGames, IconGroups, IconStats, IconSignOut, IconUser } from './Icons'
 
 const LINKS = [
     { to: '/home', label: 'Home', Icon: IconHome },
     { to: '/games', label: 'Games', Icon: IconGames },
     { to: '/groups', label: 'Groups', Icon: IconGroups },
     { to: '/stats', label: 'Stats', Icon: IconStats },
+    { to: '/profile', label: 'Profile', Icon: IconUser },
 ]
 
 /**
